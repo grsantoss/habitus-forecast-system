@@ -83,7 +83,7 @@ jobs:
               print('✓ Database connection OK')
           "
 
-    # Lint do Frontend
+  # Lint do Frontend
   frontend-lint:
     name: Frontend Lint
     runs-on: ubuntu-latest

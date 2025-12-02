@@ -42,54 +42,65 @@ app.register_blueprint(admin_bp, url_prefix='/api')
 app.register_blueprint(settings_bp)
 
 # Configuração do banco de dados
-database_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database', 'app.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{database_path}"
+# Usar DATABASE_URL se disponível (para CI/produção), senão usar SQLite local
+database_url = os.getenv('DATABASE_URL')
+if database_url:
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    # Para SQLite local, garantir que o diretório existe
+    database_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database')
+    os.makedirs(database_dir, exist_ok=True)
+    database_path = os.path.join(database_dir, 'app.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{database_path}"
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 db.init_app(app)
 
-# Criar tabelas e dados iniciais
-with app.app_context():
-    db.create_all()
-    
-    # Criar usuário admin padrão se não existir
-    from src.models.user import User, CategoriaFinanceira
-    admin_user = User.query.filter_by(email='admin@habitus.com').first()
-    if not admin_user:
-        admin_user = User(
-            nome='Administrador',
-            email='admin@habitus.com',
-            role='admin',
-            status='active'
-        )
-        admin_user.set_password('admin123')
-        db.session.add(admin_user)
-    
-    # Criar categorias financeiras padrão se não existirem
-    categorias_padrao = [
-        ('FATURAMENTO', 'OPERACIONAL'),
-        ('ENTRADAS OPERACIONAIS', 'OPERACIONAL'),
-        ('MARGEM CONTRIBUIÇÃO', 'OPERACIONAL'),
-        ('GASTOS FIXOS', 'OPERACIONAL'),
-        ('FDC OPERACIONAL', 'OPERACIONAL'),
-        ('IMPOSTOS', 'OPERACIONAL'),
-        ('COMISSÕES', 'OPERACIONAL'),
-        ('CUSTOS SERVIÇOS', 'OPERACIONAL'),
-        ('DESPESAS PESSOAL', 'OPERACIONAL'),
-        ('DESPESAS ADMINISTRATIVAS', 'OPERACIONAL'),
-        ('DESPESAS FINANCEIRAS', 'OPERACIONAL'),
-        ('INVESTIMENTOS', 'INVESTIMENTO'),
-        ('FINANCIAMENTOS', 'FINANCIAMENTO'),
-    ]
-    
-    for nome, tipo_fluxo in categorias_padrao:
-        categoria_existente = CategoriaFinanceira.query.filter_by(nome=nome).first()
-        if not categoria_existente:
-            categoria = CategoriaFinanceira(nome=nome, tipo_fluxo=tipo_fluxo)
-            db.session.add(categoria)
-    
-    db.session.commit()
+# Criar tabelas e dados iniciais apenas se não estiver em modo de teste/CI
+# No CI, isso será feito pelo step de migrations/testes
+if not os.getenv('SKIP_DB_INIT'):
+    with app.app_context():
+        db.create_all()
+        
+        # Criar usuário admin padrão se não existir
+        from src.models.user import User, CategoriaFinanceira
+        admin_user = User.query.filter_by(email='admin@habitus.com').first()
+        if not admin_user:
+            admin_user = User(
+                nome='Administrador',
+                email='admin@habitus.com',
+                role='admin',
+                status='active'
+            )
+            admin_user.set_password('admin123')
+            db.session.add(admin_user)
+        
+        # Criar categorias financeiras padrão se não existirem
+        categorias_padrao = [
+            ('FATURAMENTO', 'OPERACIONAL'),
+            ('ENTRADAS OPERACIONAIS', 'OPERACIONAL'),
+            ('MARGEM CONTRIBUIÇÃO', 'OPERACIONAL'),
+            ('GASTOS FIXOS', 'OPERACIONAL'),
+            ('FDC OPERACIONAL', 'OPERACIONAL'),
+            ('IMPOSTOS', 'OPERACIONAL'),
+            ('COMISSÕES', 'OPERACIONAL'),
+            ('CUSTOS SERVIÇOS', 'OPERACIONAL'),
+            ('DESPESAS PESSOAL', 'OPERACIONAL'),
+            ('DESPESAS ADMINISTRATIVAS', 'OPERACIONAL'),
+            ('DESPESAS FINANCEIRAS', 'OPERACIONAL'),
+            ('INVESTIMENTOS', 'INVESTIMENTO'),
+            ('FINANCIAMENTOS', 'FINANCIAMENTO'),
+        ]
+        
+        for nome, tipo_fluxo in categorias_padrao:
+            categoria_existente = CategoriaFinanceira.query.filter_by(nome=nome).first()
+            if not categoria_existente:
+                categoria = CategoriaFinanceira(nome=nome, tipo_fluxo=tipo_fluxo)
+                db.session.add(categoria)
+        
+        db.session.commit()
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

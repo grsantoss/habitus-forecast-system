@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 130" width="500" height="130">
+  <defs>
+    <style>
+      .gear { fill: #22c55e; stroke: #16a34a; stroke-width: 0.5; }
+      .text { fill: #22c55e; font-family: 'Arial', 'Helvetica', sans-serif; font-weight: bold; font-size: 44px; letter-spacing: 0.5px; }
+    </style>
+  </defs>
+  
+  <!-- Engrenagem maior (superior direita) -->
+  <g class="gear" transform="translate(65, 25)">
+    <!-- Corpo da engrenagem com 12 dentes -->
+    <path d="M 0 -35 
+             L 4 -29 L 12 -33 L 10 -22 L 19 -16 L 10 -9 L 12 2 L 4 -1 L 0 8 
+             L -4 -1 L -12 2 L -10 -9 L -19 -16 L -10 -22 L -12 -33 L -4 -29 Z" />
+    <!-- Centro -->
+    <circle cx="0" cy="0" r="14" fill="#ffffff"/>
+    <circle cx="0" cy="0" r="6" fill="#22c55e"/>
+  </g>
+  
+  <!-- Engrenagem menor (inferior esquerda) -->
+  <g class="gear" transform="translate(30, 65)">
+    <!-- Corpo da engrenagem com 10 dentes -->
+    <path d="M 0 -26 
+             L 3 -21 L 9 -24 L 7.5 -16 L 14 -12 L 7.5 -8 L 9 0 L 3 -1.5 L 0 6 
+             L -3 -1.5 L -9 0 L -7.5 -8 L -14 -12 L -7.5 -16 L -9 -24 L -3 -21 Z" />
+    <!-- Centro -->
+    <circle cx="0" cy="0" r="10" fill="#ffffff"/>
+    <circle cx="0" cy="0" r="5" fill="#22c55e"/>
+  </g>
+  
+  <!-- Texto Foreca$t -->
+  <text x="140" y="85" class="text">Foreca$t</text>
+</svg>

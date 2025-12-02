@@ -1,10 +1,15 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import { Toaster } from 'sonner';
 import Layout from './components/Layout';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import DataUpload from './components/DataUpload';
+import Scenarios from './components/Scenarios';
+import Reports from './components/Reports';
+import Settings from './components/Settings';
+import AdminUsers from './components/AdminUsers';
 import './App.css';
 
 // Criar cliente do React Query
@@ -32,6 +37,29 @@ const ProtectedRoute = ({ children }) => {
   return isAuthenticated ? children : <Navigate to="/login" />;
 };
 
+// Componente para rotas apenas de admin
+const AdminRoute = ({ children }) => {
+  const { user, isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+
+  if (user?.role !== 'admin') {
+    return <Navigate to="/dashboard" />;
+  }
+
+  return children;
+};
+
 // Componente para redirecionar usuários autenticados
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -48,41 +76,9 @@ const PublicRoute = ({ children }) => {
 };
 
 // Componentes placeholder para as outras páginas
-const Scenarios = () => (
-  <div className="space-y-6">
-    <h1 className="text-2xl font-bold text-gray-900">Cenários</h1>
-    <div className="bg-white p-6 rounded-lg shadow">
-      <p className="text-gray-600">Página de cenários em desenvolvimento...</p>
-    </div>
-  </div>
-);
 
-const Reports = () => (
-  <div className="space-y-6">
-    <h1 className="text-2xl font-bold text-gray-900">Relatórios</h1>
-    <div className="bg-white p-6 rounded-lg shadow">
-      <p className="text-gray-600">Página de relatórios em desenvolvimento...</p>
-    </div>
-  </div>
-);
 
-const Settings = () => (
-  <div className="space-y-6">
-    <h1 className="text-2xl font-bold text-gray-900">Configurações</h1>
-    <div className="bg-white p-6 rounded-lg shadow">
-      <p className="text-gray-600">Página de configurações em desenvolvimento...</p>
-    </div>
-  </div>
-);
 
-const AdminUsers = () => (
-  <div className="space-y-6">
-    <h1 className="text-2xl font-bold text-gray-900">Gerenciar Usuários</h1>
-    <div className="bg-white p-6 rounded-lg shadow">
-      <p className="text-gray-600">Página de gerenciamento de usuários em desenvolvimento...</p>
-    </div>
-  </div>
-);
 
 const AdminLogs = () => (
   <div className="space-y-6">
@@ -121,17 +117,53 @@ function App() {
               <Route index element={<Navigate to="/dashboard" />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="data-upload" element={<DataUpload />} />
-              <Route path="scenarios" element={<Scenarios />} />
-              <Route path="reports" element={<Reports />} />
-              <Route path="settings" element={<Settings />} />
-              <Route path="admin/users" element={<AdminUsers />} />
-              <Route path="admin/logs" element={<AdminLogs />} />
+              <Route 
+                path="scenarios" 
+                element={
+                  <AdminRoute>
+                    <Scenarios />
+                  </AdminRoute>
+                } 
+              />
+              <Route 
+                path="reports" 
+                element={
+                  <AdminRoute>
+                    <Reports />
+                  </AdminRoute>
+                } 
+              />
+              <Route 
+                path="settings" 
+                element={
+                  <AdminRoute>
+                    <Settings />
+                  </AdminRoute>
+                } 
+              />
+              <Route 
+                path="admin/users" 
+                element={
+                  <AdminRoute>
+                    <AdminUsers />
+                  </AdminRoute>
+                } 
+              />
+              <Route 
+                path="admin/logs" 
+                element={
+                  <AdminRoute>
+                    <AdminLogs />
+                  </AdminRoute>
+                } 
+              />
             </Route>
 
             {/* Rota catch-all */}
             <Route path="*" element={<Navigate to="/dashboard" />} />
           </Routes>
         </Router>
+        <Toaster position="top-right" richColors />
       </AuthProvider>
     </QueryClientProvider>
   );

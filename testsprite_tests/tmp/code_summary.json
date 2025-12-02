@@ -1,0 +1,142 @@
+{
+  "project_name": "Habitus Forecast",
+  "description": "Sistema de gestão financeira para análise e projeção de fluxo de caixa empresarial com integração direta a planilhas Habitus Forecast/FDC-REAL, cenários de vendas e visualizações interativas",
+  "tech_stack": {
+    "backend": {
+      "framework": "Flask",
+      "language": "Python 3.11+",
+      "database": "SQLite (dev) / PostgreSQL (prod)",
+      "orm": "SQLAlchemy",
+      "authentication": "JWT (JSON Web Tokens)",
+      "api_style": "RESTful",
+      "additional": ["Flask-CORS", "Alembic", "Gunicorn", "Flask-RESTX (Swagger)"]
+    },
+    "frontend": {
+      "framework": "React 18",
+      "build_tool": "Vite",
+      "routing": "React Router",
+      "state_management": "Context API + Hooks",
+      "ui_library": "shadcn/ui + Tailwind CSS",
+      "http_client": "Axios",
+      "package_manager": "pnpm"
+    },
+    "infrastructure": {
+      "containerization": "Docker + Docker Compose",
+      "ci_cd": "GitHub Actions",
+      "deployment": "SSH/VPS",
+      "reverse_proxy": "Nginx",
+      "ssl": "Let's Encrypt"
+    }
+  },
+  "main_features": [
+    "Sistema de autenticação com JWT (login, registro, logout)",
+    "Gestão de projetos financeiros (CRUD completo)",
+    "Múltiplos cenários por projeto (Pessimista, Realista, Otimista, Agressivo)",
+    "Upload e processamento de planilhas Excel (Habitus Forecast/FDC-REAL)",
+    "Dashboard interativo com visualizações financeiras",
+    "Análise de fluxo de caixa (12 meses)",
+    "Gestão de lançamentos financeiros",
+    "Painel administrativo (gestão de usuários, logs, estatísticas)",
+    "Configurações de usuário (perfil, senha, cenários)",
+    "Geração de relatórios PDF e Excel",
+    "Histórico de versões e snapshots de cenários"
+  ],
+  "api_endpoints": {
+    "authentication": [
+      "POST /api/auth/login",
+      "POST /api/auth/register",
+      "GET /api/auth/me",
+      "POST /api/auth/logout"
+    ],
+    "projects": [
+      "GET /api/projetos",
+      "POST /api/projetos",
+      "GET /api/projetos/<id>",
+      "PUT /api/projetos/<id>",
+      "DELETE /api/projetos/<id>"
+    ],
+    "scenarios": [
+      "GET /api/cenarios",
+      "POST /api/projetos/<id>/cenarios",
+      "PUT /api/cenarios/<id>",
+      "DELETE /api/cenarios/<id>",
+      "GET /api/cenarios/<id>/analise",
+      "GET /api/cenarios/<id>/graficos",
+      "POST /api/cenarios/comparar"
+    ],
+    "financial_entries": [
+      "GET /api/cenarios/<id>/lancamentos",
+      "POST /api/cenarios/<id>/lancamentos",
+      "PUT /api/cenarios/<id>/lancamentos/<lancamento_id>",
+      "DELETE /api/cenarios/<id>/lancamentos/<lancamento_id>"
+    ],
+    "upload": [
+      "POST /api/upload-planilha",
+      "POST /api/validar-planilha",
+      "GET /api/uploads/history",
+      "GET /api/uploads/<id>/download",
+      "DELETE /api/uploads/<id>",
+      "PUT /api/uploads/<id>/rename"
+    ],
+    "dashboard": [
+      "GET /api/dashboard/stats",
+      "GET /api/dashboard/fluxo-caixa/<projeto_id>",
+      "GET /api/dashboard/categorias/<projeto_id>",
+      "GET /api/dashboard/saldo-inicial",
+      "POST /api/dashboard/saldo-inicial",
+      "POST /api/dashboard/ponto-equilibrio"
+    ],
+    "admin": [
+      "GET /api/admin/usuarios",
+      "POST /api/admin/usuarios",
+      "PUT /api/admin/usuarios/<id>",
+      "DELETE /api/admin/usuarios/<id>",
+      "GET /api/admin/logs",
+      "GET /api/admin/estatisticas",
+      "GET /api/admin/projetos"
+    ],
+    "settings": [
+      "GET /api/settings/cenarios",
+      "POST /api/settings/cenarios",
+      "GET /api/settings/profile",
+      "PUT /api/settings/profile",
+      "PUT /api/settings/password"
+    ],
+    "health": [
+      "GET /api/health"
+    ]
+  },
+  "database_schema": {
+    "main_tables": [
+      "usuarios",
+      "projetos",
+      "cenarios",
+      "categorias_financeiras",
+      "lancamentos_financeiros",
+      "arquivos_upload",
+      "logs_sistema",
+      "configuracao_cenarios"
+    ]
+  },
+  "authentication": {
+    "method": "JWT",
+    "token_expiration": "24 hours",
+    "roles": ["admin", "usuario"],
+    "user_statuses": ["pending", "active", "rejected"]
+  },
+  "default_credentials": {
+    "email": "admin@habitus.com",
+    "password": "admin123"
+  },
+  "ports": {
+    "backend": 5000,
+    "frontend_dev": 5173,
+    "database": 5432
+  },
+  "file_upload": {
+    "max_size": "16MB",
+    "allowed_formats": [".xlsx", ".xls"],
+    "processing": "Extração de dados de planilhas Habitus Forecast/FDC-REAL"
+  }
+}
+

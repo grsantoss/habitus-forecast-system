@@ -96,14 +96,21 @@ export const AuthProvider = ({ children }) => {
     return user?.role === 'admin';
   };
 
+  const updateUser = (userData) => {
+    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
+  };
+
   const value = {
     user,
+    setUser,        // ADICIONE ESTA LINHA
     loading,
     isAuthenticated,
     login,
     register,
     logout,
     isAdmin,
+    updateUser,     // ADICIONE ESTA LINHA
   };
 
   return (

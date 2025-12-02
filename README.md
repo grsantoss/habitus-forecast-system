@@ -1,6 +1,6 @@
 # Habitus Foreca$t
 
-Sistema de gestão financeira inteligente para análise e projeção de fluxo de caixa empresarial.
+Sistema de gestão financeira para análise e projeção de fluxo de caixa empresarial com integração direta a planilhas Habitus Foreca$t/FDC-REAL, cenários de vendas e visualizações interativas.
 
 ## 📋 Sobre o Projeto
 
@@ -8,24 +8,24 @@ O **Habitus Foreca$t** é uma aplicação web completa para gestão financeira q
 
 - 📊 **Dashboard Interativo**: Visualização de dados financeiros em tempo real
 - 📈 **Análise de Cenários**: Comparação entre projeções otimistas, realistas e pessimistas  
-- 📤 **Upload de Planilhas**: Processamento automático de planilhas PROFECIA
+- 📤 **Upload de Planilhas**: Processamento automático de planilhas Habitus Foreca$t
 - 👥 **Gestão de Usuários**: Sistema completo de autenticação e autorização
 - 🔧 **Painel Admin**: Ferramentas administrativas e logs do sistema
 
 ## 🏗️ Arquitetura
 
 ### Backend (Flask)
-- **Framework**: Flask + SQLAlchemy
-- **Banco de Dados**: SQLite (desenvolvimento) / PostgreSQL (produção)
-- **Autenticação**: JWT (JSON Web Tokens)
-- **APIs**: RESTful com documentação completa
+- Framework: Flask + SQLAlchemy
+- Banco de Dados: SQLite (dev)
+- Autenticação: JWT (JSON Web Tokens)
+- APIs: RESTful
 
 ### Frontend (React)
-- **Framework**: React 18 + Vite
-- **Roteamento**: React Router
-- **Estado**: Context API + Hooks
-- **Estilização**: CSS Modules
-- **Requisições**: Axios
+- Framework: React 18 + Vite
+- Roteamento: React Router
+- Estado: Context API + Hooks
+- UI: shadcn/ui + Tailwind CSS
+- HTTP: Axios
 
 ## 🚀 Como Executar
 
@@ -51,6 +51,8 @@ cd frontend
 pnpm install
 pnpm run dev
 ```
+
+> Dica (Windows): caso use PowerShell, ative o ambiente virtual com `venv\Scripts\Activate.ps1`.
 
 ## 🔑 Credenciais Padrão
 
@@ -92,14 +94,27 @@ habitus-forecast/
 - Histórico de alterações
 
 ### ✅ Processamento de Planilhas
-- Upload automático de arquivos Excel
-- Extração de dados das 29 abas da planilha PROFECIA
-- Validação e mapeamento para banco de dados
+- Upload de arquivos Excel
+- Extração dirigida por matriz fixa
+  - Habitus Foreca$t: linha 56, colunas 3 a 14 (verde)
+  - FDC-REAL: linha 63, colunas 3 a 14 (preto)
+- Alinhamento mês a mês (12 meses à frente a partir do mês base)
+- Sempre exibe os dados do arquivo mais recente enviado
+- Exclusão em cascata: ao excluir um upload, remove cenários e lançamentos associados
 
 ### ✅ Dashboard Financeiro
-- Gráficos interativos de fluxo de caixa
-- Comparação entre cenários
-- Métricas e KPIs financeiros
+- Bloco "Habitus Foreca$t vs FDC-Real" (linha verde x linha preta)
+  - Apenas 12 meses, iniciando no mês selecionado em “Data-base”
+  - Vazio quando não há planilhas (mensagem “Nenhum dado disponível”)
+  - Usa sempre o último arquivo enviado
+- Cenários de Vendas (Pessimista, Realista, Otimista, Agressivo)
+  - Percentuais configurados em Settings e aplicados à linha verde
+- Saldo Inicial Caixa (total)
+  - Máscara BRL (pt-BR)
+  - Limite: R$ 1.000.000,00
+  - Valor é somado a cada mês da linha verde (Habitus Foreca$t) e persistido no projeto
+- Métricas (cards) e tabela “Projeção Financeira”
+  - Não exibem dados mock quando não há planilhas
 
 ### ✅ Painel Administrativo
 - Gestão de usuários
@@ -117,21 +132,36 @@ habitus-forecast/
 - **arquivos_upload**: Histórico de uploads
 - **logs_sistema**: Auditoria e monitoramento
 
+### Regras importantes
+- Um novo Projeto é criado para cada arquivo enviado (último projeto = último upload)
+- `HABITUS_FORECA$T-GRAFICO` representa os valores da aba Habitus Foreca$t (linha 56)
+- `FDC-REAL` representa os valores reais (linha 63)
+- `saldo_inicial_caixa` pertence ao Projeto e é aplicado na linha verde
+
+## 🔗 Endpoints Relevantes
+
+Base: `/api`
+
+- `POST /upload` — upload de planilha
+- `GET /dashboard/fluxo-caixa/<projeto_id>` — dados do gráfico (12 meses)
+- `GET /dashboard/categorias/<projeto_id>` — distribuição de custos
+- `GET /dashboard/stats` — métricas gerais
+- `GET /dashboard/saldo-inicial` — obtém `saldo_inicial_caixa` do projeto corrente do usuário
+- `POST /dashboard/saldo-inicial` — atualiza `saldo_inicial_caixa` (valida 0 ≤ valor ≤ 1_000_000)
+
+Payload de atualização de saldo:
+```json
+{ "saldo_inicial": 50000 }
+```
+
 ## 🔧 Tecnologias Utilizadas
 
 ### Backend
-- Flask 2.3+
-- SQLAlchemy (ORM)
-- Flask-CORS
-- PyJWT
-- Pandas (processamento de planilhas)
-- OpenPyXL (leitura Excel)
+- Flask, SQLAlchemy, Flask-CORS, PyJWT
+- Pandas / OpenPyXL (planilhas)
 
 ### Frontend
-- React 18
-- Vite (build tool)
-- Axios (HTTP client)
-- React Router (roteamento)
+- React 18, Vite, Axios, React Router, Tailwind, shadcn/ui
 
 ## 📝 Licença
 

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Configuração base da API
-const API_BASE_URL = 'http://localhost:5000/api';
+// Configuração base da API a partir de variáveis de ambiente
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 // Criar instância do axios
 const api = axios.create({
@@ -58,6 +58,33 @@ export const projectsAPI = {
   update: (id, data) => api.put(`/projetos/${id}`, data),
   delete: (id) => api.delete(`/projetos/${id}`),
   createScenario: (projectId, data) => api.post(`/projetos/${projectId}/cenarios`, data),
+  listScenarios: () => api.get('/cenarios'),
+  updateScenario: (cenarioId, data) => api.put(`/cenarios/${cenarioId}`, data),
+  deleteScenario: (cenarioId) => api.delete(`/cenarios/${cenarioId}`),
+  getScenarioAnalysis: (cenarioId) => api.get(`/cenarios/${cenarioId}/analise`),
+  listLancamentos: (cenarioId) => api.get(`/cenarios/${cenarioId}/lancamentos`),
+  createLancamento: (cenarioId, data) => api.post(`/cenarios/${cenarioId}/lancamentos`, data),
+  updateLancamento: (cenarioId, lancamentoId, data) => api.put(`/cenarios/${cenarioId}/lancamentos/${lancamentoId}`, data),
+  deleteLancamento: (cenarioId, lancamentoId) => api.delete(`/cenarios/${cenarioId}/lancamentos/${lancamentoId}`),
+  listCategorias: () => api.get('/categorias'),
+  getScenarioCharts: (cenarioId, periodo = 'mensal') => api.get(`/cenarios/${cenarioId}/graficos?periodo=${periodo}`),
+  compareScenarios: (cenarioIds) => api.post('/cenarios/comparar', { cenario_ids: cenarioIds }),
+  downloadReport: (cenarioId, format, periodo = 'todos', template = 'detailed') => {
+    const url = `/cenarios/${cenarioId}/relatorio/${format}?periodo=${periodo}&template=${template}`;
+    return api.get(url, { responseType: 'blob' });
+  },
+  downloadComparisonReport: (cenarioIds, format, periodo = 'todos') => {
+    const endpoint = format === 'pdf' 
+      ? '/cenarios/relatorio-comparativo/pdf'
+      : '/cenarios/relatorio-comparativo/excel';
+    return api.post(endpoint, { 
+      cenario_ids: cenarioIds,
+      periodo: periodo
+    }, { responseType: 'blob' });
+  },
+  createSnapshot: (cenarioId, descricao = '') => api.post(`/cenarios/${cenarioId}/snapshot`, { descricao }),
+  listHistorico: (cenarioId) => api.get(`/cenarios/${cenarioId}/historico`),
+  restoreVersion: (cenarioId, historicoId) => api.post(`/cenarios/${cenarioId}/restaurar/${historicoId}`),
 };
 
 // Funções de upload
@@ -80,15 +107,42 @@ export const uploadAPI = {
       },
     });
   },
+  rename: (id, nome) => api.put(`/uploads/${id}/rename`, { nome }),
 };
 
 // Funções de dashboard
 export const dashboardAPI = {
-  getStats: () => api.get('/dashboard/stats'),
-  getCashFlow: (projectId) => api.get(`/dashboard/fluxo-caixa/${projectId}`),
+  getStats: (usuarioId = null) => 
+    usuarioId 
+      ? api.get(`/dashboard/stats?usuario_id=${usuarioId}`)
+      : api.get('/dashboard/stats'),
+  getCashFlow: (projectId, scenario = 'Realista', usuarioId = null) => {
+    const params = new URLSearchParams();
+    if (scenario) {
+      params.append('cenario', scenario);
+    }
+    if (usuarioId) {
+      params.append('usuario_id', usuarioId);
+    }
+    const query = params.toString();
+    const suffix = query ? `?${query}` : '';
+    return api.get(`/dashboard/fluxo-caixa/${projectId}${suffix}`);
+  },
   getCategoriesData: (projectId) => api.get(`/dashboard/categorias/${projectId}`),
   getPlatformActivity: () => api.get('/dashboard/atividade-plataforma'),
   getActiveUsers: () => api.get('/dashboard/usuarios-ativos'),
+  getSaldoInicial: (usuarioId = null) => 
+    usuarioId
+      ? api.get(`/dashboard/saldo-inicial?usuario_id=${usuarioId}`)
+      : api.get('/dashboard/saldo-inicial'),
+  updateSaldoInicial: (saldoInicial, usuarioId = null) => {
+    const qs = usuarioId ? `?usuario_id=${usuarioId}` : '';
+    return api.post(`/dashboard/saldo-inicial${qs}`, { saldo_inicial: saldoInicial });
+  },
+  updatePontoEquilibrio: (pontoEquilibrio, usuarioId = null) => {
+    const qs = usuarioId ? `?usuario_id=${usuarioId}` : '';
+    return api.post(`/dashboard/ponto-equilibrio${qs}`, { ponto_equilibrio: pontoEquilibrio });
+  },
 };
 
 // Funções administrativas

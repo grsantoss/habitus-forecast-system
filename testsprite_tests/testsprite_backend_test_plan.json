@@ -1,0 +1,52 @@
+[
+  {
+    "id": "TC001",
+    "title": "post api auth login",
+    "description": "Test user login with valid and invalid credentials and verify JWT token issuance."
+  },
+  {
+    "id": "TC002",
+    "title": "post api auth register",
+    "description": "Test user registration with valid data and handle duplicate or invalid inputs."
+  },
+  {
+    "id": "TC003",
+    "title": "get api auth me",
+    "description": "Test retrieval of current authenticated user data with valid JWT token."
+  },
+  {
+    "id": "TC004",
+    "title": "post api auth logout",
+    "description": "Test user logout functionality and token invalidation."
+  },
+  {
+    "id": "TC005",
+    "title": "get api projetos",
+    "description": "Test listing of projects for authenticated user."
+  },
+  {
+    "id": "TC006",
+    "title": "post api projetos",
+    "description": "Test creation of new project with valid data for authenticated user."
+  },
+  {
+    "id": "TC007",
+    "title": "post api upload planilha",
+    "description": "Test upload and processing of valid Excel spreadsheet with authentication."
+  },
+  {
+    "id": "TC008",
+    "title": "get api dashboard stats",
+    "description": "Test retrieval of general financial statistics on dashboard with authentication."
+  },
+  {
+    "id": "TC009",
+    "title": "post api cenarios projetos projetoid cenarios",
+    "description": "Test creation of financial scenario for a given project with valid data and authentication."
+  },
+  {
+    "id": "TC010",
+    "title": "get api admin usuarios",
+    "description": "Test listing of users by admin with proper authentication and admin role verification."
+  }
+]

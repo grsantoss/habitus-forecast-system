@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from datetime import timedelta
 from src.models.user import db, User, LogSistema
-from src.auth import authenticate_user, create_access_token, token_required, get_current_user
+from src.auth import authenticate_user, create_access_token, token_required, get_current_user, ACCESS_TOKEN_EXPIRE_MINUTES
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -29,9 +29,29 @@ def login():
             db.session.commit()
             
             return jsonify({'message': 'Email ou senha incorretos'}), 401
+
+        # Verificar status do usuário (fluxo de aprovação)
+        if user.status != 'active':
+            log = LogSistema(
+                usuario_id=user.id,
+                acao='LOGIN_BLOCKED_STATUS',
+                detalhes={
+                    'ip': request.remote_addr,
+                    'status': user.status
+                }
+            )
+            db.session.add(log)
+            db.session.commit()
+
+            if user.status == 'pending':
+                return jsonify({'message': 'Seu cadastro está aguardando aprovação do administrador.'}), 403
+            elif user.status == 'rejected':
+                return jsonify({'message': 'Seu cadastro foi rejeitado. Entre em contato com o administrador.'}), 403
+            else:
+                return jsonify({'message': 'Usuário inativo. Entre em contato com o administrador.'}), 403
         
         # Criar token
-        access_token_expires = timedelta(minutes=30)
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             data={"sub": user.email}, expires_delta=access_token_expires
         )
@@ -69,6 +89,7 @@ def register():
             return jsonify({'message': 'Email já está em uso'}), 400
         
         # Criar novo usuário
+        # Usuários criados via registro comum iniciam como "pending" para aprovação do admin
         user = User(
             nome=data.get('nome'),
             email=data.get('email'),

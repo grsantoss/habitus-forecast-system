@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
+import logoLogin from '../assets/habitus-forecast-login.svg';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -37,12 +38,12 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-green-600 mb-2">
-            Habitus Foreca$t
-          </h1>
-          <p className="text-gray-600">
-            Gestão Financeira Inteligente
-          </p>
+          <img 
+            src={logoLogin} 
+            alt="Habitus Foreca$t" 
+            className="mx-auto max-w-full h-auto"
+            style={{ maxHeight: '150px' }}
+          />
         </div>
 
         <Card>
@@ -101,30 +102,6 @@ const Login = () => {
                 )}
               </Button>
             </form>
-
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
-                Não tem uma conta?{' '}
-                <Link 
-                  to="/register" 
-                  className="text-green-600 hover:text-green-700 font-medium"
-                >
-                  Criar conta
-                </Link>
-              </p>
-            </div>
-
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-              <p className="text-xs text-gray-600 mb-2">Contas de teste:</p>
-              <div className="text-xs space-y-1">
-                <div>
-                  <strong>Admin:</strong> admin@habitus.com / admin123
-                </div>
-                <div>
-                  <strong>Usuário:</strong> Criar nova conta
-                </div>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

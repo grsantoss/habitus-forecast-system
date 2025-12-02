@@ -73,7 +73,9 @@ def criar_usuario(current_user):
         user = User(
             nome=data.get('nome'),
             email=data.get('email'),
-            role=data.get('role', 'usuario')
+            role=data.get('role', 'usuario'),
+            # Usuários criados pelo admin já podem vir como ativos por padrão
+            status=data.get('status', 'active')
         )
         user.set_password(data.get('password'))
         
@@ -121,6 +123,10 @@ def atualizar_usuario(current_user, usuario_id):
             usuario.email = data.get('email')
         if data.get('role'):
             usuario.role = data.get('role')
+        if data.get('status'):
+            if data.get('status') not in ['pending', 'active', 'rejected']:
+                return jsonify({'message': 'Status inválido'}), 400
+            usuario.status = data.get('status')
         if data.get('password'):
             usuario.set_password(data.get('password'))
         

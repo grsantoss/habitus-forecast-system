@@ -12,7 +12,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # Configurações JWT
 SECRET_KEY = "habitus_secret_key_2025_super_secure"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 10080  # 7 dias (7 * 24 * 60)
 
 def verify_password(plain_password, hashed_password):
     """Verifica se a senha está correta"""

@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  # Banco de dados PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: habitus-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-habitus_forecast}
+      POSTGRES_USER: ${POSTGRES_USER:-habitus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-habitus123}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-habitus}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - habitus-network
+    restart: unless-stopped
+
+  # Build Frontend (para copiar arquivos estáticos para o backend)
+  frontend-builder:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: builder
+    volumes:
+      - frontend-build:/app/dist
+    command: sh -c "pnpm run build && cp -r dist/* /app/dist/"
+    profiles:
+      - build-frontend
+
+  # Backend Flask
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: habitus-backend
+    environment:
+      # Banco de dados
+      DATABASE_URL: postgresql://${POSTGRES_USER:-habitus}:${POSTGRES_PASSWORD:-habitus123}@db:5432/${POSTGRES_DB:-habitus_forecast}
+      # Flask
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+      FLASK_ENV: ${FLASK_ENV:-development}
+      FLASK_DEBUG: ${FLASK_DEBUG:-True}
+      # CORS
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5000,http://localhost:5173}
+      # Servidor
+      PORT: ${PORT:-5000}
+      WORKERS: ${WORKERS:-2}
+      # Upload
+      MAX_CONTENT_LENGTH: ${MAX_CONTENT_LENGTH:-16777216}
+    ports:
+      - "${PORT:-5000}:5000"
+    volumes:
+      # Montar código para desenvolvimento (hot reload)
+      - ./backend:/app
+      - ./backend/uploads:/app/uploads
+      - ./backend/database:/app/database
+      - backend_logs:/app/logs
+      # Build do frontend será copiado durante o build do backend
+      - ./backend/src/static:/app/src/static
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - habitus-network
+    restart: unless-stopped
+    command: >
+      sh -c "
+        echo 'Aguardando banco de dados...' &&
+        sleep 5 &&
+        alembic upgrade head &&
+        python scripts/seed_db.py || true &&
+        gunicorn --config gunicorn_config.py wsgi:application
+      "
+
+  # Frontend React (opcional para desenvolvimento)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: builder
+    container_name: habitus-frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - ./frontend/dist:/app/dist
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    environment:
+      - VITE_API_URL=http://localhost:5000/api
+    command: pnpm run dev -- --host 0.0.0.0
+    networks:
+      - habitus-network
+    profiles:
+      - dev
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  backend_logs:
+    driver: local
+
+networks:
+  habitus-network:
+    driver: bridge
+

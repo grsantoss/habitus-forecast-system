@@ -26,6 +26,15 @@ def init_database():
         admin_user.set_password('admin123')
         db.session.add(admin_user)
         
+        # Criar usuário de teste
+        test_user = User(
+            nome='George Santos',
+            email='georgersantos@teste.com.br',
+            role='admin'
+        )
+        test_user.set_password('123456')
+        db.session.add(test_user)
+        
         # Criar categorias financeiras padrão
         categorias_padrao = [
             ('FATURAMENTO', 'OPERACIONAL'),
@@ -51,6 +60,7 @@ def init_database():
         
         print("Dados iniciais criados:")
         print(f"- Usuário admin: admin@habitus.com / admin123")
+        print(f"- Usuário teste: georgersantos@teste.com.br / 123456")
         print(f"- {len(categorias_padrao)} categorias financeiras")
         print("Banco de dados inicializado com sucesso!")
 

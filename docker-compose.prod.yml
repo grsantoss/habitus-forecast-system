@@ -1,0 +1,28 @@
+version: '3.8'
+
+# Override para produção
+# Use: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  backend:
+    # Em produção, não montar volumes de código
+    volumes:
+      - ./backend/uploads:/app/uploads:ro
+      - backend_logs:/app/logs
+    environment:
+      FLASK_ENV: production
+      FLASK_DEBUG: "False"
+      WORKERS: ${WORKERS:-4}
+    # Não usar hot reload em produção
+    command: >
+      sh -c "
+        alembic upgrade head &&
+        gunicorn --config gunicorn_config.py wsgi:application
+      "
+    restart: always
+
+  # Frontend não é necessário em produção (build estático servido pelo backend)
+  frontend:
+    profiles:
+      - never
+

@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Banco de dados
+*.db
+*.sqlite
+*.sqlite3
+database/
+
+# Logs
+*.log
+logs/
+backend_errors.log
+
+# Arquivos de ambiente
+.env
+.env.local
+.env.*.local
+
+# Uploads
+uploads/
+temp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Documentação e scripts locais
+docs/
+README*.md
+*.md
+scripts/
+start_backend.ps1
+analyze_*.py
+fix_*.py
+init_*.py
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# Testes
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Misc
+*.tgz
+*.tar.gz
+

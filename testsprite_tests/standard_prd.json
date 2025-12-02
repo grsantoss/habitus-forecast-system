@@ -1,0 +1,307 @@
+{
+  "product_name": "Habitus Forecast",
+  "version": "1.0",
+  "description": "Sistema de gestão financeira para análise e projeção de fluxo de caixa empresarial com integração direta a planilhas Habitus Forecast/FDC-REAL",
+  "objectives": [
+    "Facilitar análise financeira e projeção de fluxo de caixa",
+    "Processar planilhas Excel automaticamente",
+    "Permitir comparação de múltiplos cenários de vendas",
+    "Fornecer visualizações interativas de dados financeiros"
+  ],
+  "target_users": [
+    "Analistas financeiros",
+    "Gestores financeiros",
+    "CFOs",
+    "Administradores do sistema"
+  ],
+  "key_features": [
+    {
+      "name": "Autenticação e Autorização",
+      "description": "Sistema de login com JWT, controle de acesso por roles (admin/usuário), gestão de status de usuários",
+      "priority": "critical"
+    },
+    {
+      "name": "Gestão de Projetos Financeiros",
+      "description": "CRUD completo de projetos, associação a usuários, múltiplos projetos por usuário",
+      "priority": "critical"
+    },
+    {
+      "name": "Processamento de Planilhas",
+      "description": "Upload e processamento automático de planilhas Excel (Habitus Forecast/FDC-REAL), extração de dados específicos, histórico de uploads",
+      "priority": "critical"
+    },
+    {
+      "name": "Gestão de Cenários",
+      "description": "Criação de múltiplos cenários (Pessimista, Realista, Otimista, Agressivo), configuração de percentuais, análise e comparação de cenários",
+      "priority": "high"
+    },
+    {
+      "name": "Dashboard Financeiro",
+      "description": "Visualização de métricas, gráfico Habitus Forecast vs FDC-REAL, gráfico de categorias, configuração de saldo inicial",
+      "priority": "critical"
+    },
+    {
+      "name": "Gestão de Lançamentos",
+      "description": "CRUD de lançamentos financeiros por cenário, categorias financeiras pré-definidas",
+      "priority": "high"
+    },
+    {
+      "name": "Painel Administrativo",
+      "description": "Gestão de usuários, logs do sistema, estatísticas administrativas, visualização de todos os projetos",
+      "priority": "high"
+    },
+    {
+      "name": "Relatórios",
+      "description": "Geração de relatórios PDF e Excel de cenários individuais e comparativos",
+      "priority": "medium"
+    },
+    {
+      "name": "Configurações",
+      "description": "Perfil do usuário, alteração de senha, configuração de cenários",
+      "priority": "medium"
+    }
+  ],
+  "api_endpoints": {
+    "authentication": {
+      "base_path": "/api/auth",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/login",
+          "description": "Autenticar usuário e obter token JWT",
+          "requires_auth": false
+        },
+        {
+          "method": "POST",
+          "path": "/register",
+          "description": "Registrar novo usuário",
+          "requires_auth": false
+        },
+        {
+          "method": "GET",
+          "path": "/me",
+          "description": "Obter dados do usuário atual",
+          "requires_auth": true
+        },
+        {
+          "method": "POST",
+          "path": "/logout",
+          "description": "Fazer logout",
+          "requires_auth": true
+        }
+      ]
+    },
+    "projects": {
+      "base_path": "/api/projetos",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "",
+          "description": "Listar projetos do usuário",
+          "requires_auth": true
+        },
+        {
+          "method": "POST",
+          "path": "",
+          "description": "Criar novo projeto",
+          "requires_auth": true
+        },
+        {
+          "method": "GET",
+          "path": "/<id>",
+          "description": "Obter projeto específico",
+          "requires_auth": true
+        },
+        {
+          "method": "PUT",
+          "path": "/<id>",
+          "description": "Atualizar projeto",
+          "requires_auth": true
+        },
+        {
+          "method": "DELETE",
+          "path": "/<id>",
+          "description": "Deletar projeto",
+          "requires_auth": true
+        }
+      ]
+    },
+    "scenarios": {
+      "base_path": "/api/cenarios",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "",
+          "description": "Listar cenários",
+          "requires_auth": true
+        },
+        {
+          "method": "POST",
+          "path": "/projetos/<projeto_id>/cenarios",
+          "description": "Criar cenário",
+          "requires_auth": true
+        },
+        {
+          "method": "PUT",
+          "path": "/<id>",
+          "description": "Atualizar cenário",
+          "requires_auth": true
+        },
+        {
+          "method": "DELETE",
+          "path": "/<id>",
+          "description": "Deletar cenário",
+          "requires_auth": true
+        },
+        {
+          "method": "GET",
+          "path": "/<id>/analise",
+          "description": "Análise do cenário",
+          "requires_auth": true
+        },
+        {
+          "method": "GET",
+          "path": "/<id>/graficos",
+          "description": "Dados para gráficos",
+          "requires_auth": true
+        },
+        {
+          "method": "POST",
+          "path": "/comparar",
+          "description": "Comparar cenários",
+          "requires_auth": true
+        }
+      ]
+    },
+    "upload": {
+      "base_path": "/api",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/upload-planilha",
+          "description": "Upload e processamento de planilha",
+          "requires_auth": true
+        },
+        {
+          "method": "POST",
+          "path": "/validar-planilha",
+          "description": "Validar planilha sem processar",
+          "requires_auth": true
+        },
+        {
+          "method": "GET",
+          "path": "/uploads/history",
+          "description": "Histórico de uploads",
+          "requires_auth": true
+        }
+      ]
+    },
+    "dashboard": {
+      "base_path": "/api/dashboard",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/stats",
+          "description": "Estatísticas gerais",
+          "requires_auth": true
+        },
+        {
+          "method": "GET",
+          "path": "/fluxo-caixa/<projeto_id>",
+          "description": "Dados de fluxo de caixa",
+          "requires_auth": true
+        },
+        {
+          "method": "GET",
+          "path": "/saldo-inicial",
+          "description": "Obter saldo inicial",
+          "requires_auth": true
+        },
+        {
+          "method": "POST",
+          "path": "/saldo-inicial",
+          "description": "Atualizar saldo inicial",
+          "requires_auth": true
+        }
+      ]
+    },
+    "admin": {
+      "base_path": "/api/admin",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/usuarios",
+          "description": "Listar usuários (admin)",
+          "requires_auth": true,
+          "requires_admin": true
+        },
+        {
+          "method": "POST",
+          "path": "/usuarios",
+          "description": "Criar usuário (admin)",
+          "requires_auth": true,
+          "requires_admin": true
+        },
+        {
+          "method": "GET",
+          "path": "/logs",
+          "description": "Logs do sistema (admin)",
+          "requires_auth": true,
+          "requires_admin": true
+        }
+      ]
+    },
+    "health": {
+      "base_path": "/api",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/health",
+          "description": "Health check",
+          "requires_auth": false
+        }
+      ]
+    }
+  },
+  "authentication": {
+    "type": "JWT",
+    "token_expiration": "24 hours",
+    "default_credentials": {
+      "email": "admin@habitus.com",
+      "password": "admin123"
+    }
+  },
+  "test_scenarios": [
+    {
+      "name": "Login e Autenticação",
+      "description": "Testar login com credenciais válidas e inválidas, obtenção de token JWT",
+      "priority": "critical"
+    },
+    {
+      "name": "CRUD de Projetos",
+      "description": "Testar criação, leitura, atualização e exclusão de projetos",
+      "priority": "critical"
+    },
+    {
+      "name": "Upload de Planilha",
+      "description": "Testar upload e processamento de planilha Excel válida",
+      "priority": "critical"
+    },
+    {
+      "name": "Dashboard",
+      "description": "Testar endpoints do dashboard e visualização de dados",
+      "priority": "high"
+    },
+    {
+      "name": "Gestão de Cenários",
+      "description": "Testar criação e gestão de cenários financeiros",
+      "priority": "high"
+    },
+    {
+      "name": "Painel Admin",
+      "description": "Testar funcionalidades administrativas (apenas admin)",
+      "priority": "medium"
+    }
+  ]
+}
+

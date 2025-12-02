@@ -12,12 +12,25 @@ from src.routes.projetos import projetos_bp
 from src.routes.upload import upload_bp
 from src.routes.dashboard import dashboard_bp
 from src.routes.admin import admin_bp
+from src.routes.settings import settings_bp
+
+# Documentação da API (Swagger)
+try:
+    from src.api_docs.swagger_config import api_docs_bp
+    SWAGGER_AVAILABLE = True
+except ImportError:
+    SWAGGER_AVAILABLE = False
+    print("⚠️ Flask-RESTX não instalado. Documentação Swagger desabilitada.")
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'habitus_secret_key_2025_super_secure'
 
 # Configurar CORS para permitir requisições do frontend
 CORS(app, origins=["http://localhost:3000", "http://localhost:5000", "http://localhost:5173"])
+
+# Registrar blueprint de documentação (se disponível)
+if SWAGGER_AVAILABLE:
+    app.register_blueprint(api_docs_bp)
 
 # Registrar blueprints
 app.register_blueprint(user_bp, url_prefix='/api')
@@ -26,9 +39,11 @@ app.register_blueprint(projetos_bp, url_prefix='/api')
 app.register_blueprint(upload_bp, url_prefix='/api')
 app.register_blueprint(dashboard_bp, url_prefix='/api')
 app.register_blueprint(admin_bp, url_prefix='/api')
+app.register_blueprint(settings_bp)
 
 # Configuração do banco de dados
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
+database_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database', 'app.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{database_path}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
@@ -45,7 +60,8 @@ with app.app_context():
         admin_user = User(
             nome='Administrador',
             email='admin@habitus.com',
-            role='admin'
+            role='admin',
+            status='active'
         )
         admin_user.set_password('admin123')
         db.session.add(admin_user)

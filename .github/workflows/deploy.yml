@@ -60,7 +60,7 @@ jobs:
         working-directory: ./frontend
         run: |
           npm install -g pnpm@latest
-          pnpm install --frozen-lockfile
+         pnpm install --no-frozen-lockfile
           pnpm run build
       
       - name: Build and push frontend image

@@ -103,69 +103,42 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
           script: |
-            set -e
-            echo "🚀 Iniciando deploy..."
+           set -e
+           echo "🚀 Iniciando deploy..."
+
+           APP_DIR="${SERVER_APP_DIR:-/var/www/habitus-forecast-system}"
+
+           cd "$APP_DIR" || { echo "❌ Diretório não encontrado: $APP_DIR"; exit 1; }
+
+           echo "📦 Backup do banco..."
+           docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T db \
+           pg_dump -U ${POSTGRES_USER:-habitus} ${POSTGRES_DB:-habitus_forecast} \
+           > backup_$(date +%Y%m%d_%H%M%S).sql 2>/dev/null || echo "⚠️ Backup indisponível"
+
+           echo "📥 Atualizando código..."
+           git fetch origin
+           git reset --hard origin/main || git reset --hard origin/master
+
+           echo "🐳 Atualizando imagens..."
+           docker compose -f docker-compose.yml -f docker-compose.prod.yml pull || echo "⚠️ Falha no pull"
+
+           echo "🔨 Build e restart..."
+           docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+           echo "⏳ Aguardando backend..."
+           sleep 10
+
+           echo "🗄️ Migrações..."
+           docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend alembic upgrade head
+
+           echo "🏥 Health check..."
+           HEALTH=$(docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend curl -f http://localhost:5000/api/health 2>/dev/null || echo "FAIL")
+           [[ "$HEALTH" == *"ok"* ]] && echo "✅ OK" || { echo "❌ Falha no healthcheck"; exit 1; }
+
+           echo "🧹 Limpando..."
+           docker image prune -f || true
             
-            # Diretório da aplicação no servidor
-            APP_DIR="${SERVER_APP_DIR:-/var/www/habitus-forecast-system}"
-            
-            echo "📂 Indo para diretório da app: $APP_DIR"
-            cd "$APP_DIR" || { echo "❌ Diretório não encontrado: $APP_DIR"; exit 1; }
-            
-            # (Opcional) conferir se os arquivos de compose existem
-            if [ ! -f docker-compose.yml ] || [ ! -f docker-compose.prod.yml ]; then
-              echo "❌ Arquivos docker-compose.yml ou docker-compose.prod.yml não encontrados em $APP_DIR"
-              ls -la
-              exit 1
-            fi
-            
-            # Backup do banco antes de atualizar (opcional)
-            echo "📦 Fazendo backup do banco de dados..."
-            docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec -T db \
-              pg_dump -U ${POSTGRES_USER:-habitus} ${POSTGRES_DB:-habitus_forecast} \
-              > backup_$(date +%Y%m%d_%H%M%S).sql 2>/dev/null || echo "⚠️ Backup não disponível (banco pode não estar rodando)"
-            
-            # Atualizar código
-            echo "📥 Atualizando código..."
-            git fetch origin
-            git reset --hard origin/main || git reset --hard origin/master
-            
-            # Pull de imagens Docker (se usando registry)
-            echo "🐳 Atualizando imagens Docker..."
-            docker-compose -f docker-compose.yml -f docker-compose.prod.yml pull || echo "⚠️ Pull de imagens falhou (continuando com build local)"
-            
-            # Build e restart dos containers
-            echo "🔨 Construindo e iniciando containers..."
-            docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-            
-            # Aguardar backend estar pronto
-            echo "⏳ Aguardando backend estar pronto..."
-            sleep 10
-            
-            # Executar migrações do banco
-            echo "🗄️ Executando migrações do banco de dados..."
-            docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend alembic upgrade head
-            if [ $? -ne 0 ]; then
-              echo "❌ Alembic migrations failed. Check logs."
-              exit 1
-            fi
-            
-            # Verificar saúde da aplicação
-            echo "🏥 Verificando saúde da aplicação..."
-            sleep 5
-            HEALTH_CHECK=$(docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec -T backend curl -f http://localhost:5000/api/health 2>/dev/null || echo "FAIL")
-            if [[ "$HEALTH_CHECK" == *"ok"* ]]; then
-              echo "✅ Deploy concluído com sucesso!"
-            else
-              echo "❌ Health check failed. Check container logs."
-              exit 1
-            fi
-            
-            # Limpar imagens antigas (opcional)
-            echo "🧹 Limpando imagens antigas..."
-            docker image prune -f || true
-            
-            echo "✨ Deploy finalizado!"
+           echo "✨ Deploy finalizado!"
 
   # Opção 2: Deploy para Railway (desabilitado por padrão)
   # Descomente e configure secrets se quiser usar Railway

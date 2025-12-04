@@ -126,6 +126,6 @@ jobs:
       
       - name: Lint Docker Compose
         run: |
-          docker-compose config > /dev/null || echo "Docker Compose syntax OK"
+          docker compose config > /dev/null || echo "Docker Compose syntax OK"
         continue-on-error: true
 

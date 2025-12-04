@@ -115,7 +115,7 @@ jobs:
             
             # Backup do banco antes de atualizar (opcional)
             echo "📦 Fazendo backup do banco de dados..."
-            docker-compose $COMPOSE_FLAGS exec -T db pg_dump -U ${POSTGRES_USER:-habitus} ${POSTGRES_DB:-habitus_forecast} > backup_$(date +%Y%m%d_%H%M%S).sql 2>/dev/null || echo "⚠️ Backup não disponível (banco pode não estar rodando)"
+            docker compose $COMPOSE_FLAGS exec -T db pg_dump -U ${POSTGRES_USER:-habitus} ${POSTGRES_DB:-habitus_forecast} > backup_$(date +%Y%m%d_%H%M%S).sql 2>/dev/null || echo "⚠️ Backup não disponível (banco pode não estar rodando)"
             
             # Atualizar código
             echo "📥 Atualizando código..."
@@ -124,11 +124,11 @@ jobs:
             
             # Pull de imagens Docker (se usando registry)
             echo "🐳 Atualizando imagens Docker..."
-            docker-compose $COMPOSE_FLAGS pull || echo "⚠️ Pull de imagens falhou (continuando com build local)"
+            docker compose $COMPOSE_FLAGS pull || echo "⚠️ Pull de imagens falhou (continuando com build local)"
             
             # Build e restart dos containers
             echo "🔨 Construindo e iniciando containers..."
-            docker-compose $COMPOSE_FLAGS up -d --build
+            docker compose $COMPOSE_FLAGS up -d --build
             
             # Aguardar backend estar pronto
             echo "⏳ Aguardando backend estar pronto..."
@@ -136,17 +136,17 @@ jobs:
             
             # Executar migrações do banco
             echo "🗄️ Executando migrações do banco de dados..."
-            docker-compose $COMPOSE_FLAGS exec -T backend alembic upgrade head || echo "⚠️ Migrações falharam (verificar logs)"
+            docker compose $COMPOSE_FLAGS exec -T backend alembic upgrade head || echo "⚠️ Migrações falharam (verificar logs)"
             
             # Verificar saúde da aplicação
             echo "🏥 Verificando saúde da aplicação..."
             sleep 5
-            HEALTH_CHECK=$(docker-compose $COMPOSE_FLAGS exec -T backend curl -fsS http://localhost:5000/api/health 2>/dev/null || echo "FAIL")
+            HEALTH_CHECK=$(docker compose $COMPOSE_FLAGS exec -T backend curl -fsS http://localhost:5000/api/health 2>/dev/null || echo "FAIL")
             if [[ "$HEALTH_CHECK" == *"ok"* ]]; then
               echo "✅ Deploy concluído com sucesso!"
             else
               echo "❌ Health check falhou. Mostrando logs do backend:"
-              docker-compose $COMPOSE_FLAGS logs --tail=200 backend || true
+              docker compose $COMPOSE_FLAGS logs --tail=200 backend || true
               echo "⚠️ Health check falhou, mas containers estão rodando"
             fi
             

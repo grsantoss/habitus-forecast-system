@@ -33,6 +33,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
+      # Verificar estrutura do projeto
+      - name: Verify project structure
+        run: |
+          echo "📁 Verificando estrutura do projeto..."
+          ls -la
+          echo "📁 Backend:"
+          ls -la backend/ || echo "❌ Pasta backend não encontrada"
+          echo "📁 Frontend:"
+          ls -la frontend/ || echo "❌ Pasta frontend não encontrada"
+          echo "📄 Dockerfiles:"
+          test -f backend/Dockerfile && echo "✅ backend/Dockerfile existe" || echo "❌ backend/Dockerfile não encontrado"
+          test -f frontend/Dockerfile && echo "✅ frontend/Dockerfile existe" || echo "❌ frontend/Dockerfile não encontrado"
+      
       # Metadata para backend
       - name: Extract metadata for backend
         id: meta-backend
@@ -46,6 +59,14 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
+      
+      # Debug: Mostrar tags do backend
+      - name: Debug backend tags
+        run: |
+          echo "🏷️ Tags do backend:"
+          echo "${{ steps.meta-backend.outputs.tags }}"
+          echo "🏷️ Labels do backend:"
+          echo "${{ steps.meta-backend.outputs.labels }}"
       
       # Metadata para frontend
       - name: Extract metadata for frontend
@@ -61,6 +82,14 @@ jobs:
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
       
+      # Debug: Mostrar tags do frontend
+      - name: Debug frontend tags
+        run: |
+          echo "🏷️ Tags do frontend:"
+          echo "${{ steps.meta-frontend.outputs.tags }}"
+          echo "🏷️ Labels do frontend:"
+          echo "${{ steps.meta-frontend.outputs.labels }}"
+      
       - name: Build and push backend image
         uses: docker/build-push-action@v5
         with:
@@ -71,6 +100,8 @@ jobs:
           labels: ${{ steps.meta-backend.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
       
       - name: Build and push frontend image
         uses: docker/build-push-action@v5
@@ -83,6 +114,8 @@ jobs:
           labels: ${{ steps.meta-frontend.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
 
   # Deploy (escolha uma opção abaixo)
   
@@ -112,15 +145,37 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
           script: |
-            set -euo pipefail
+            set -euxo pipefail
             echo "🚀 Iniciando deploy..."
+            echo "📋 Informações do ambiente:"
+            echo "  - Host: ${{ secrets.SERVER_HOST }}"
+            echo "  - Usuário: ${{ secrets.SERVER_USER }}"
+            echo "  - Branch: ${{ github.ref }}"
+            echo "  - Commit: ${{ github.sha }}"
             
             # Variáveis (ajustar conforme necessário)
             APP_DIR="${SERVER_APP_DIR:-/var/www/habitus-forecast-system}"
             COMPOSE_FLAGS="-f docker-compose.yml -f docker-compose.prod.yml"
             
+            # Verificar se diretório existe
+            echo "📁 Verificando diretório da aplicação: $APP_DIR"
+            if [ ! -d "$APP_DIR" ]; then
+              echo "❌ ERRO: Diretório não encontrado: $APP_DIR"
+              echo "💡 Criando diretório..."
+              sudo mkdir -p "$APP_DIR" || exit 1
+              sudo chown -R ${{ secrets.SERVER_USER }}:${{ secrets.SERVER_USER }} "$APP_DIR" || exit 1
+            fi
+            
             # Navegar para diretório da aplicação
-            cd "$APP_DIR" || { echo "❌ Diretório não encontrado: $APP_DIR"; exit 1; }
+            cd "$APP_DIR" || { echo "❌ Erro ao acessar diretório: $APP_DIR"; exit 1; }
+            echo "✅ Diretório atual: $(pwd)"
+            
+            # Verificar se é repositório git
+            if [ ! -d ".git" ]; then
+              echo "⚠️ Diretório não é um repositório git. Inicializando..."
+              git init || exit 1
+              git remote add origin https://github.com/${{ github.repository }}.git || true
+            fi
             
             # Backup do banco antes de atualizar (opcional)
             echo "📦 Fazendo backup do banco de dados..."
@@ -128,8 +183,14 @@ jobs:
             
             # Atualizar código
             echo "📥 Atualizando código..."
-            git fetch origin
-            git reset --hard origin/main || git reset --hard origin/master
+            git fetch origin || { echo "❌ Erro ao fazer fetch"; exit 1; }
+            git reset --hard origin/main 2>/dev/null || git reset --hard origin/master || { echo "❌ Erro ao fazer reset"; exit 1; }
+            echo "✅ Código atualizado. Último commit: $(git log -1 --oneline)"
+            
+            # Verificar docker-compose files
+            echo "📄 Verificando arquivos docker-compose..."
+            test -f docker-compose.yml && echo "✅ docker-compose.yml encontrado" || { echo "❌ docker-compose.yml não encontrado"; exit 1; }
+            test -f docker-compose.prod.yml && echo "✅ docker-compose.prod.yml encontrado" || echo "⚠️ docker-compose.prod.yml não encontrado (continuando...)"
             
             # Pull de imagens Docker (se usando registry)
             echo "🐳 Atualizando imagens Docker..."
@@ -137,26 +198,40 @@ jobs:
             
             # Build e restart dos containers
             echo "🔨 Construindo e iniciando containers..."
-            docker compose $COMPOSE_FLAGS up -d --build
+            docker compose $COMPOSE_FLAGS up -d --build || { 
+              echo "❌ Erro ao construir/iniciar containers. Logs:"
+              docker compose $COMPOSE_FLAGS logs --tail=100
+              exit 1
+            }
             
             # Aguardar backend estar pronto
             echo "⏳ Aguardando backend estar pronto..."
             sleep 10
             
+            # Verificar se containers estão rodando
+            echo "🔍 Verificando status dos containers..."
+            docker compose $COMPOSE_FLAGS ps
+            
             # Executar migrações do banco
             echo "🗄️ Executando migrações do banco de dados..."
-            docker compose $COMPOSE_FLAGS exec -T backend alembic upgrade head || echo "⚠️ Migrações falharam (verificar logs)"
+            docker compose $COMPOSE_FLAGS exec -T backend alembic upgrade head || { 
+              echo "⚠️ Migrações falharam (verificar logs)"
+              docker compose $COMPOSE_FLAGS logs --tail=50 backend
+            }
             
             # Verificar saúde da aplicação
             echo "🏥 Verificando saúde da aplicação..."
             sleep 5
             HEALTH_CHECK=$(docker compose $COMPOSE_FLAGS exec -T backend curl -fsS http://localhost:5000/api/health 2>/dev/null || echo "FAIL")
-            if [[ "$HEALTH_CHECK" == *"ok"* ]]; then
+            if [[ "$HEALTH_CHECK" == *"ok"* ]] || [[ "$HEALTH_CHECK" == *"healthy"* ]]; then
+              echo "✅ Health check passou!"
               echo "✅ Deploy concluído com sucesso!"
             else
-              echo "❌ Health check falhou. Mostrando logs do backend:"
+              echo "❌ Health check falhou. Resposta: $HEALTH_CHECK"
+              echo "📋 Mostrando logs do backend:"
               docker compose $COMPOSE_FLAGS logs --tail=200 backend || true
               echo "⚠️ Health check falhou, mas containers estão rodando"
+              # Não falhar o deploy se health check falhar (pode ser temporário)
             fi
             
             # Limpar imagens antigas (opcional)

@@ -1,460 +1,438 @@
-# Guia Completo: Instalação em Produção - Habitus Forecast
+# Guia Completo: Instalação e Deploy em Produção - Habitus Forecast
 
-**Para Leigos - Passo a Passo Detalhado**
-
-Este guia vai te ajudar a instalar e configurar a aplicação Habitus Forecast em um servidor Linux (Ubuntu/Debian) do zero, incluindo a configuração para deploy automático via GitHub Actions.
+**Versão:** 2.0  
+**Última atualização:** 2025-01-XX  
+**Para:** Administradores de Sistema e DevOps
 
 ---
 
 ## 📋 Índice
 
-1. [Pré-requisitos](#pré-requisitos)
-2. [Parte 1: Preparar o Servidor](#parte-1-preparar-o-servidor)
-3. [Parte 2: Configurar SSH para GitHub Actions](#parte-2-configurar-ssh-para-github-actions)
-4. [Parte 3: Instalar a Aplicação](#parte-3-instalar-a-aplicação)
-5. [Parte 4: Configurar Variáveis de Ambiente](#parte-4-configurar-variáveis-de-ambiente)
-6. [Parte 5: Primeiro Deploy](#parte-5-primeiro-deploy)
-7. [Parte 6: Verificar Funcionamento](#parte-6-verificar-funcionamento)
-8. [Parte 7: Configurar GitHub Secrets](#parte-7-configurar-github-secrets)
-9. [Troubleshooting](#troubleshooting)
+1. [Visão Geral](#visão-geral)
+2. [Pré-requisitos](#pré-requisitos)
+3. [Arquitetura da Aplicação](#arquitetura-da-aplicação)
+4. [Preparação do Servidor](#preparação-do-servidor)
+5. [Instalação da Aplicação](#instalação-da-aplicação)
+6. [Configuração de Variáveis de Ambiente](#configuração-de-variáveis-de-ambiente)
+7. [Build e Deploy](#build-e-deploy)
+8. [Configuração de HTTPS/SSL](#configuração-de-httpsssl)
+9. [Configuração do Nginx](#configuração-do-nginx)
+10. [Validação e Testes](#validação-e-testes)
+11. [Monitoramento e Manutenção](#monitoramento-e-manutenção)
+12. [Troubleshooting](#troubleshooting)
+13. [Comandos Úteis](#comandos-úteis)
+
+---
+
+## 🎯 Visão Geral
+
+O **Habitus Forecast** é uma aplicação web completa para gestão financeira empresarial, composta por:
+
+- **Backend**: API Flask (Python 3.11) com PostgreSQL
+- **Frontend**: Aplicação React (Vite) servida como arquivos estáticos
+- **Banco de Dados**: PostgreSQL 15
+- **Servidor Web**: Nginx como reverse proxy
+- **Containerização**: Docker e Docker Compose
+
+### Requisitos Mínimos do Servidor
+
+- **CPU**: 2 cores
+- **RAM**: 4GB (recomendado 8GB)
+- **Disco**: 20GB livres (recomendado 50GB)
+- **Sistema Operacional**: Ubuntu 20.04+ ou Debian 11+
+- **Rede**: Portas 80, 443 e 5000 abertas
 
 ---
 
 ## 📦 Pré-requisitos
 
-Antes de começar, você precisa ter:
+Antes de começar, certifique-se de ter:
 
-- ✅ Um servidor Linux (Ubuntu 20.04+ ou Debian 11+)
-- ✅ Acesso SSH ao servidor (usuário com permissões sudo)
-- ✅ Um repositório GitHub com o código da aplicação
-- ✅ Um domínio apontando para o servidor (opcional, mas recomendado)
-
-**Informações que você vai precisar:**
-- IP ou domínio do servidor
-- Usuário SSH do servidor (ex: `ubuntu`, `root`, `deploy`)
-- Senha do usuário SSH ou chave SSH já configurada
+- ✅ Servidor Linux com acesso SSH
+- ✅ Domínio configurado e apontando para o servidor (DNS)
+- ✅ Acesso root ou usuário com permissões sudo
+- ✅ Conhecimento básico de Linux, Docker e Nginx
+- ✅ Repositório Git com o código da aplicação
 
 ---
 
-## 🖥️ Parte 1: Preparar o Servidor
+## 🏗️ Arquitetura da Aplicação
 
-### Passo 1.1: Conectar ao Servidor
+```
+┌─────────────────┐
+│   Nginx (443)   │ ← HTTPS/SSL
+└────────┬────────┘
+         │
+         ├─→ /api → Backend Flask (5000)
+         │
+         └─→ / → Frontend React (arquivos estáticos)
+                  │
+                  └─→ PostgreSQL (5432)
+```
 
-No seu computador local, abra o terminal (PowerShell no Windows, Terminal no Mac/Linux) e conecte-se ao servidor:
+### Estrutura de Diretórios em Produção
+
+```
+/var/www/habitus-forecast-system/
+├── backend/
+│   ├── src/
+│   │   └── static/          # Frontend build (copiado durante deploy)
+│   ├── uploads/             # Arquivos enviados pelos usuários
+│   ├── database/            # SQLite (apenas dev, não usado em prod)
+│   ├── logs/                # Logs da aplicação
+│   └── migrations/          # Migrações do banco de dados
+├── frontend/                # Código fonte (usado apenas para build)
+├── nginx/                   # Configurações do Nginx
+├── scripts/                 # Scripts de deploy e manutenção
+├── docker-compose.yml       # Configuração base Docker
+├── docker-compose.prod.yml  # Override para produção
+└── .env                     # Variáveis de ambiente (NÃO commitado)
+```
+
+---
+
+## 🖥️ Preparação do Servidor
+
+### Passo 1: Conectar ao Servidor
 
 ```bash
 ssh usuario@seu-servidor.com
-```
-
-**Exemplo:**
-```bash
-ssh ubuntu@192.168.1.100
 # ou
-ssh root@meuservidor.com
+ssh root@192.168.1.100
 ```
 
-**Se pedir senha:** Digite a senha do usuário e pressione Enter.
+### Passo 2: Executar Script de Setup Automatizado
 
-**Se pedir confirmação:** Digite `yes` e pressione Enter.
-
----
-
-### Passo 1.2: Atualizar o Sistema
-
-Após conectar, atualize o sistema operacional:
+O projeto inclui um script que automatiza a instalação de todas as dependências:
 
 ```bash
-sudo apt update
-sudo apt upgrade -y
+# Baixar e executar script de setup
+sudo bash scripts/setup-server.sh
 ```
 
-**O que isso faz:** Atualiza a lista de pacotes e instala atualizações de segurança.
+**O que o script faz:**
+- Atualiza o sistema operacional
+- Instala Docker e Docker Compose
+- Instala Git
+- Instala Node.js 18 e pnpm (para build do frontend)
+- Adiciona usuário ao grupo docker
+- Cria diretório `/var/www`
 
-**Tempo estimado:** 5-10 minutos
+### Passo 3: Instalação Manual (Alternativa)
 
----
-
-### Passo 1.3: Instalar Docker
-
-Docker é necessário para rodar a aplicação em containers.
+Se preferir instalar manualmente:
 
 ```bash
-# Instalar Docker
+# 1. Atualizar sistema
+sudo apt update && sudo apt upgrade -y
+
+# 2. Instalar Docker
 curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
 rm get-docker.sh
-```
 
-**Verificar se instalou:**
-```bash
-docker --version
-```
-
-Você deve ver algo como: `Docker version 24.x.x`
-
----
-
-### Passo 1.4: Instalar Docker Compose
-
-Docker Compose é usado para gerenciar múltiplos containers.
-
-```bash
-# Instalar Docker Compose
+# 3. Instalar Docker Compose
 sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 sudo chmod +x /usr/local/bin/docker-compose
-```
 
-**Verificar se instalou:**
-```bash
-docker-compose --version
-```
-
-Você deve ver algo como: `Docker Compose version v2.x.x`
-
----
-
-### Passo 1.5: Instalar Git
-
-Git é necessário para baixar o código do GitHub.
-
-```bash
+# 4. Instalar Git
 sudo apt install git -y
-```
 
-**Verificar se instalou:**
-```bash
-git --version
-```
-
----
-
-### Passo 1.6: Instalar Node.js e pnpm
-
-Necessário para fazer o build do frontend.
-
-```bash
-# Instalar Node.js
+# 5. Instalar Node.js 18
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# Instalar pnpm
+# 6. Instalar pnpm
 sudo npm install -g pnpm
-```
 
-**Verificar se instalou:**
-```bash
-node --version
-pnpm --version
-```
-
----
-
-### Passo 1.7: Adicionar Usuário ao Grupo Docker
-
-Isso permite usar Docker sem `sudo`:
-
-```bash
-# Substitua 'ubuntu' pelo seu usuário se for diferente
+# 7. Adicionar usuário ao grupo docker
 sudo usermod -aG docker $USER
 
-# OU se souber o nome do usuário:
-sudo usermod -aG docker ubuntu
-```
-
-**IMPORTANTE:** Faça logout e login novamente para aplicar a mudança:
-
-```bash
-exit
-```
-
-Depois conecte novamente:
-```bash
-ssh usuario@seu-servidor.com
-```
-
-**Verificar se funcionou:**
-```bash
-docker ps
-```
-
-Se não pedir senha, está funcionando! ✅
-
----
-
-### Passo 1.8: Criar Diretório para a Aplicação
-
-```bash
-# Criar diretório
+# 8. Criar diretório para aplicações
 sudo mkdir -p /var/www
 sudo chown $USER:$USER /var/www
 ```
 
----
-
-## 🔐 Parte 2: Configurar SSH para GitHub Actions
-
-Para o GitHub Actions fazer deploy automático, precisamos configurar autenticação SSH.
-
-### Passo 2.1: Gerar Chave SSH no Servidor
+**⚠️ IMPORTANTE:** Após adicionar o usuário ao grupo docker, faça logout e login novamente:
 
 ```bash
-# Gerar chave SSH
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_actions_deploy
-
-# Quando pedir:
-# - Passphrase: Pressione Enter (deixe em branco)
-# - Confirm passphrase: Pressione Enter novamente
+exit
+# Reconectar
+ssh usuario@seu-servidor.com
 ```
 
-**O que isso cria:**
-- `~/.ssh/github_actions_deploy` - Chave privada (NUNCA compartilhe!)
-- `~/.ssh/github_actions_deploy.pub` - Chave pública (pode compartilhar)
-
----
-
-### Passo 2.2: Adicionar Chave Pública ao Servidor
+**Verificar instalação:**
 
 ```bash
-# Ver a chave pública
-cat ~/.ssh/github_actions_deploy.pub
+docker --version          # Deve mostrar versão do Docker
+docker-compose --version  # Deve mostrar versão do Docker Compose
+git --version             # Deve mostrar versão do Git
+node --version            # Deve mostrar v18.x.x
+pnpm --version            # Deve mostrar versão do pnpm
+docker ps                 # Não deve pedir senha
+```
 
-# Adicionar ao authorized_keys
-cat ~/.ssh/github_actions_deploy.pub >> ~/.ssh/authorized_keys
+### Passo 4: Configurar Firewall
 
-# Ajustar permissões (IMPORTANTE!)
-chmod 600 ~/.ssh/authorized_keys
-chmod 700 ~/.ssh
+```bash
+# Verificar status do firewall
+sudo ufw status
+
+# Permitir portas necessárias
+sudo ufw allow 22/tcp    # SSH
+sudo ufw allow 80/tcp    # HTTP
+sudo ufw allow 443/tcp   # HTTPS
+sudo ufw allow 5000/tcp  # Backend (opcional, apenas para testes)
+
+# Habilitar firewall
+sudo ufw enable
+
+# Verificar regras
+sudo ufw status numbered
 ```
 
 ---
 
-### Passo 2.3: Obter Chave Privada (para GitHub Secrets)
+## 📥 Instalação da Aplicação
+
+### Passo 1: Clonar Repositório
 
 ```bash
-# Ver a chave privada completa
-cat ~/.ssh/github_actions_deploy
-```
-
-**Copie TODO o conteúdo** (incluindo `-----BEGIN OPENSSH PRIVATE KEY-----` e `-----END OPENSSH PRIVATE KEY-----`).
-
-**Você vai precisar disso depois** para adicionar no GitHub Secrets.
-
----
-
-## 📥 Parte 3: Instalar a Aplicação
-
-### Passo 3.1: Clonar o Repositório
-
-```bash
-# Ir para o diretório
+# Ir para diretório de aplicações
 cd /var/www
 
-# Clonar repositório (substitua pela URL do seu repositório)
+# Clonar repositório
 git clone https://github.com/seu-usuario/habitus-forecast-system.git
+# OU se for repositório privado:
+git clone https://SEU_TOKEN@github.com/seu-usuario/habitus-forecast-system.git
 
 # Entrar no diretório
 cd habitus-forecast-system
 ```
 
-**Se o repositório for privado**, você pode precisar configurar autenticação:
+### Passo 2: Criar Diretórios Necessários
 
 ```bash
-# Opção 1: Usar token pessoal
-git clone https://SEU_TOKEN@github.com/seu-usuario/habitus-forecast-system.git
-
-# Opção 2: Configurar SSH (mais seguro)
-# Adicione sua chave SSH ao GitHub primeiro
-```
-
----
-
-### Passo 3.2: Criar Diretórios Necessários
-
-```bash
-# Criar diretórios para uploads e logs
+# Criar diretórios para uploads, logs e banco de dados
 mkdir -p backend/uploads backend/logs backend/database
 chmod -R 755 backend/uploads backend/logs
 ```
 
+### Passo 3: Verificar Estrutura
+
+```bash
+# Verificar se todos os arquivos necessários estão presentes
+ls -la
+ls -la backend/
+ls -la frontend/
+ls -la nginx/
+ls -la scripts/
+```
+
 ---
 
-## ⚙️ Parte 4: Configurar Variáveis de Ambiente
+## ⚙️ Configuração de Variáveis de Ambiente
 
-### Passo 4.1: Copiar Arquivo de Exemplo
+### Passo 1: Copiar Arquivo de Exemplo
 
 ```bash
 # Copiar arquivo de exemplo
 cp env.production.example .env
 
-# Editar o arquivo
+# Editar arquivo
 nano .env
+# ou
+vim .env
 ```
 
-**Como usar o editor nano:**
-- Use as setas para navegar
-- Digite para editar
-- `Ctrl + O` para salvar (depois Enter)
-- `Ctrl + X` para sair
-
----
-
-### Passo 4.2: Configurar Variáveis Importantes
-
-Abra o arquivo `.env` e configure as seguintes variáveis:
-
-#### 1. Gerar SECRET_KEY
-
-No servidor, execute:
+### Passo 2: Gerar SECRET_KEY
 
 ```bash
+# Gerar chave secreta segura
 python3 -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-**Copie o resultado** e cole no `.env` na linha `SECRET_KEY=`
+**Copie o resultado** e use no arquivo `.env`.
 
-#### 2. Configurar PostgreSQL
+### Passo 3: Configurar Variáveis Obrigatórias
 
-No arquivo `.env`, encontre e altere:
+Edite o arquivo `.env` com as seguintes configurações:
 
 ```env
+# ============================================
+# PostgreSQL Database
+# ============================================
 POSTGRES_DB=habitus_forecast
 POSTGRES_USER=habitus
-POSTGRES_PASSWORD=SUA_SENHA_FORTE_AQUI  # Escolha uma senha forte!
-POSTGRES_PORT=5432
-```
-
-**Importante:** Use a mesma senha em `POSTGRES_PASSWORD` e na `DATABASE_URL`.
-
-#### 3. Configurar DATABASE_URL
-
-```env
-DATABASE_URL=postgresql://habitus:SUA_SENHA_FORTE_AQUI@db:5432/habitus_forecast
-```
-
-**Substitua `SUA_SENHA_FORTE_AQUI`** pela mesma senha que você usou em `POSTGRES_PASSWORD`.
-
-#### 4. Configurar CORS_ORIGINS
-
-```env
-CORS_ORIGINS=https://seu-dominio.com,https://www.seu-dominio.com
-```
-
-**Se não tiver domínio ainda**, use o IP:
-
-```env
-CORS_ORIGINS=http://SEU_IP:5000
-```
-
-#### 5. Exemplo Completo do .env
-
-```env
-# PostgreSQL
-POSTGRES_DB=habitus_forecast
-POSTGRES_USER=habitus
-POSTGRES_PASSWORD=MinhaSenh@SuperSegura123!
+POSTGRES_PASSWORD=SUA_SENHA_FORTE_AQUI
 POSTGRES_PORT=5432
 
-# Backend
+# ============================================
+# Backend Flask
+# ============================================
+# Cole a SECRET_KEY gerada no passo anterior
 SECRET_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6
-DATABASE_URL=postgresql://habitus:MinhaSenh@SuperSegura123!@db:5432/habitus_forecast
+
+# URL do banco de dados (usar nome do serviço Docker 'db')
+DATABASE_URL=postgresql://habitus:SUA_SENHA_FORTE_AQUI@db:5432/habitus_forecast
+
+# Ambiente
 FLASK_ENV=production
 FLASK_DEBUG=False
+
+# Servidor
 PORT=5000
 WORKERS=4
-CORS_ORIGINS=https://meuservidor.com,https://www.meuservidor.com
+
+# CORS - Domínios de produção permitidos
+# IMPORTANTE: Substitua pelo seu domínio real
+CORS_ORIGINS=https://seu-dominio.com,https://www.seu-dominio.com
+
+# Upload
 MAX_CONTENT_LENGTH=16777216
+
+# ============================================
+# Frontend (Vite)
+# ============================================
+# IMPORTANTE: Configure antes de fazer build do frontend
+VITE_API_URL=https://seu-dominio.com/api
+
+# ============================================
+# Monitoramento (Opcional mas Recomendado)
+# ============================================
+# Sentry - Monitoramento de erros
+# 1. Crie conta em https://sentry.io
+# 2. Crie projeto Flask/Python
+# 3. Copie o DSN e cole abaixo
+# SENTRY_DSN=https://seu-dsn-do-sentry@sentry.io/projeto
+
+# Versão da aplicação
+APP_VERSION=1.0.0
+
+# ============================================
+# Logging
+# ============================================
+LOG_LEVEL=INFO
+LOG_FORMAT=json
 ```
 
-**Salve o arquivo:** `Ctrl + O`, Enter, `Ctrl + X`
+**⚠️ IMPORTANTE:**
+- Substitua `SUA_SENHA_FORTE_AQUI` por uma senha forte e única
+- Use a mesma senha em `POSTGRES_PASSWORD` e `DATABASE_URL`
+- Substitua `seu-dominio.com` pelo seu domínio real
+- Se não tiver domínio ainda, use o IP temporariamente: `http://SEU_IP:5000`
+
+### Passo 4: Validar Configuração
+
+```bash
+# Executar script de validação
+bash scripts/validate-pre-deploy.sh
+```
+
+O script verifica:
+- ✅ Estrutura do projeto
+- ✅ Variáveis de ambiente obrigatórias
+- ✅ Segurança (SECRET_KEY, CORS, etc.)
+- ✅ Dependências e migrations
+- ✅ Configurações do Nginx
+
+**Se houver erros**, corrija antes de continuar.
 
 ---
 
-## 🚀 Parte 5: Primeiro Deploy
+## 🚀 Build e Deploy
 
-### Passo 5.1: Iniciar os Containers
+### Passo 1: Build do Frontend
+
+O frontend precisa ser buildado antes de iniciar os containers:
 
 ```bash
-# Certifique-se de estar no diretório do projeto
-cd /var/www/habitus-forecast-system
+# Ir para diretório do frontend
+cd frontend
 
-# Iniciar containers
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Instalar dependências
+pnpm install --frozen-lockfile
+
+# Configurar variável de ambiente para build
+export VITE_API_URL=https://seu-dominio.com/api
+# OU se não tiver domínio ainda:
+export VITE_API_URL=http://SEU_IP:5000/api
+
+# Build do frontend
+pnpm run build
+
+# Verificar se build foi criado
+ls -la ../backend/src/static/
+
+# Voltar para raiz do projeto
+cd ..
 ```
 
-**O que isso faz:**
-- Baixa as imagens Docker necessárias
-- Cria e inicia os containers (banco de dados, backend, frontend)
-- Faz o build da aplicação
+**O build do frontend será copiado para `backend/src/static/`** (configurado no `vite.config.js`).
 
-**Tempo estimado:** 5-15 minutos na primeira vez
+### Passo 2: Deploy com Docker Compose
 
----
-
-### Passo 5.2: Verificar Status dos Containers
+#### Opção A: Deploy Automatizado (Recomendado)
 
 ```bash
+# Executar script de deploy completo
+bash scripts/deploy-producao-completo.sh
+```
+
+O script automatiza:
+- ✅ Validação pré-deploy
+- ✅ Build do frontend (se necessário)
+- ✅ Build dos containers Docker
+- ✅ Parada de containers existentes
+- ✅ Inicialização dos containers
+- ✅ Verificação de saúde dos serviços
+
+#### Opção B: Deploy Manual
+
+```bash
+# 1. Build dos containers
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml build
+
+# 2. Parar containers existentes (se houver)
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
+
+# 3. Iniciar containers
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# 4. Verificar status
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml ps
+
+# 5. Ver logs
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
 ```
 
-**Você deve ver 3 containers rodando:**
-- `habitus-forecast-system-db-1` (banco de dados)
-- `habitus-forecast-system-backend-1` (backend)
-- `habitus-forecast-system-frontend-1` (frontend)
+### Passo 3: Verificar Migrações
 
-Se algum estiver com status diferente de "Up", veja os logs:
+As migrações são executadas automaticamente durante a inicialização do backend (ver `docker-compose.prod.yml`), mas você pode executar manualmente:
 
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs nome-do-container
-```
-
----
-
-### Passo 5.3: Executar Migrações do Banco de Dados
-
-```bash
+# Executar migrações manualmente
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend alembic upgrade head
 ```
 
-**O que isso faz:** Cria as tabelas no banco de dados.
-
----
-
-### Passo 5.4: Popular Dados Iniciais (Opcional)
+### Passo 4: Verificar Saúde dos Serviços
 
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python scripts/seed_db.py
-```
-
-**O que isso faz:** Cria usuário admin padrão e categorias financeiras iniciais.
-
-**Credenciais padrão do admin:**
-- Email: `admin@habitus.com`
-- Senha: `admin123`
-
-**⚠️ IMPORTANTE:** Altere a senha após o primeiro login!
-
----
-
-## ✅ Parte 6: Verificar Funcionamento
-
-### Passo 6.1: Verificar Health Check
-
-```bash
+# Verificar health check da API
 curl http://localhost:5000/api/health
+
+# Resposta esperada:
+# {"status": "ok", "message": "Habitus Forecast API está funcionando"}
 ```
 
-**Resposta esperada:**
-```json
-{"status": "ok", "message": "Habitus Forecast API está funcionando"}
-```
-
----
-
-### Passo 6.2: Ver Logs
+### Passo 5: Verificar Logs
 
 ```bash
 # Ver logs do backend
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs -f backend
+
+# Ver logs do banco de dados
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs -f db
 
 # Ver logs de todos os containers
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
@@ -464,120 +442,335 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
 
 ---
 
-### Passo 6.3: Acessar a Aplicação
+## 🔒 Configuração de HTTPS/SSL
 
-**Se tiver domínio configurado:**
-- Acesse: `https://seu-dominio.com`
-
-**Se não tiver domínio:**
-- Acesse: `http://SEU_IP:5000`
-
-**Se não conseguir acessar**, verifique o firewall:
+### Passo 1: Instalar Nginx e Certbot
 
 ```bash
-# Verificar se porta 5000 está aberta
-sudo ufw status
+# Instalar Nginx e Certbot
+sudo apt update
+sudo apt install -y nginx certbot python3-certbot-nginx
+```
 
-# Se não estiver, abrir porta
-sudo ufw allow 5000/tcp
-sudo ufw reload
+### Passo 2: Configurar Nginx Temporariamente (HTTP)
+
+Antes de obter o certificado SSL, configure o Nginx para HTTP:
+
+```bash
+# Copiar configuração HTTP
+sudo cp nginx/habitus-forecast-http.conf /etc/nginx/sites-available/habitus-forecast
+
+# Editar configuração
+sudo nano /etc/nginx/sites-available/habitus-forecast
+```
+
+**Ajustar no arquivo:**
+- `server_name`: Seu domínio (ex: `app.habitusforecast.com.br`)
+- `root`: Caminho completo para `backend/src/static` (ex: `/var/www/habitus-forecast-system/backend/src/static`)
+
+```nginx
+server_name app.habitusforecast.com.br;
+root /var/www/habitus-forecast-system/backend/src/static;
+```
+
+```bash
+# Habilitar site
+sudo ln -s /etc/nginx/sites-available/habitus-forecast /etc/nginx/sites-enabled/
+
+# Remover site padrão (se existir)
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# Testar configuração
+sudo nginx -t
+
+# Reiniciar Nginx
+sudo systemctl restart nginx
+sudo systemctl enable nginx
+```
+
+### Passo 3: Obter Certificado SSL
+
+```bash
+# Obter certificado SSL do Let's Encrypt
+sudo certbot --nginx -d seu-dominio.com -d www.seu-dominio.com
+
+# Durante o processo, você será solicitado a:
+# - Inserir email para notificações
+# - Aceitar termos de serviço
+# - Escolher redirecionar HTTP para HTTPS (recomendado: 2)
+```
+
+**⚠️ IMPORTANTE:** O domínio deve estar apontando para o servidor (DNS configurado) antes de executar este comando.
+
+### Passo 4: Atualizar Configuração Nginx com SSL
+
+Após obter o certificado, atualize a configuração do Nginx:
+
+```bash
+# Copiar configuração completa com SSL
+sudo cp nginx/habitus-forecast.conf /etc/nginx/sites-available/habitus-forecast
+
+# Editar configuração
+sudo nano /etc/nginx/sites-available/habitus-forecast
+```
+
+**Ajustar no arquivo:**
+- `server_name`: Seu domínio
+- `ssl_certificate` e `ssl_certificate_key`: Caminhos gerados pelo Certbot (geralmente já corretos)
+- `root`: Caminho completo para `backend/src/static`
+
+```bash
+# Testar configuração
+sudo nginx -t
+
+# Recarregar Nginx
+sudo systemctl reload nginx
+```
+
+### Passo 5: Configurar Renovação Automática
+
+```bash
+# Habilitar timer de renovação automática
+sudo systemctl enable certbot.timer
+sudo systemctl start certbot.timer
+
+# Verificar status
+sudo systemctl status certbot.timer
+
+# Testar renovação (dry-run)
+sudo certbot renew --dry-run
+```
+
+### Passo 6: Atualizar Variáveis de Ambiente
+
+Após configurar HTTPS, atualize o arquivo `.env`:
+
+```bash
+# Editar .env
+nano .env
+```
+
+**Atualizar:**
+```env
+CORS_ORIGINS=https://seu-dominio.com,https://www.seu-dominio.com
+VITE_API_URL=https://seu-dominio.com/api
+```
+
+**Reiniciar containers para aplicar mudanças:**
+
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart backend
 ```
 
 ---
 
-## 🔑 Parte 7: Configurar GitHub Secrets
+## 🌐 Configuração do Nginx
 
-Agora vamos configurar o GitHub para fazer deploy automático.
+### Arquivo de Configuração Completo
 
-### Passo 7.1: Acessar GitHub Secrets
+O arquivo `nginx/habitus-forecast.conf` já está configurado com:
 
-1. Vá para seu repositório no GitHub
-2. Clique em **Settings** (Configurações)
-3. No menu lateral esquerdo, vá em **Security**
-4. Clique em **Secrets and variables** ▶
-5. Clique em **Actions**
-6. Clique em **New repository secret**
+- ✅ Redirecionamento HTTP → HTTPS
+- ✅ Configurações SSL modernas (TLS 1.2 e 1.3)
+- ✅ Headers de segurança (HSTS, X-Frame-Options, etc.)
+- ✅ Proxy reverso para backend Flask
+- ✅ Servir arquivos estáticos do frontend
+- ✅ Suporte a SPA routing (React Router)
+- ✅ Cache de assets estáticos
+- ✅ Timeouts e buffering configurados
 
----
+### Personalização
 
-### Passo 7.2: Adicionar Secrets
-
-Adicione os seguintes secrets (um por vez):
-
-#### Secret 1: SSH_PRIVATE_KEY
-
-- **Name:** `SSH_PRIVATE_KEY`
-- **Secret:** Cole a chave privada que você copiou no **Passo 2.3**
-  - Deve incluir `-----BEGIN OPENSSH PRIVATE KEY-----` no início
-  - E `-----END OPENSSH PRIVATE KEY-----` no final
-- Clique em **Add secret**
-
-#### Secret 2: SERVER_HOST
-
-- **Name:** `SERVER_HOST`
-- **Secret:** IP ou domínio do seu servidor
-  - Exemplo: `192.168.1.100` ou `meuservidor.com`
-- Clique em **Add secret**
-
-#### Secret 3: SERVER_USER
-
-- **Name:** `SERVER_USER`
-- **Secret:** Usuário SSH do servidor
-  - Exemplo: `ubuntu`, `root`, `deploy`
-- Clique em **Add secret**
-
-#### Secret 4: SSH_PORT (Opcional)
-
-- **Name:** `SSH_PORT`
-- **Secret:** `22` (porta padrão SSH)
-- Clique em **Add secret**
-
----
-
-### Passo 7.3: Testar Deploy Automático
-
-1. Faça uma pequena alteração no código localmente
-2. Commit e push:
+Se precisar personalizar, edite `/etc/nginx/sites-available/habitus-forecast`:
 
 ```bash
-git add .
-git commit -m "test: teste deploy automático"
-git push origin main
+sudo nano /etc/nginx/sites-available/habitus-forecast
 ```
 
-3. Vá para **GitHub → Actions**
-4. Veja o workflow **"Deploy to Production"** executando
-5. Aguarde conclusão (5-10 minutos)
+**Após editar, sempre teste e recarregue:**
 
-**Se der erro**, veja os logs clicando no workflow.
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+---
+
+## ✅ Validação e Testes
+
+### Passo 1: Testar Endpoints da API
+
+```bash
+# Health check
+curl https://seu-dominio.com/api/health
+
+# Deve retornar:
+# {"status": "ok", "message": "Habitus Forecast API está funcionando"}
+```
+
+### Passo 2: Testar Frontend
+
+1. Acesse `https://seu-dominio.com` no navegador
+2. Verifique se a página carrega corretamente
+3. Teste o login com credenciais padrão:
+   - **Email**: `admin@habitus.com`
+   - **Senha**: `admin123`
+
+**⚠️ IMPORTANTE:** Altere a senha do admin após o primeiro login!
+
+### Passo 3: Verificar Logs
+
+```bash
+# Ver logs do backend
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs backend | tail -50
+
+# Ver logs do Nginx
+sudo tail -f /var/log/nginx/habitus-forecast-access.log
+sudo tail -f /var/log/nginx/habitus-forecast-error.log
+```
+
+### Passo 4: Verificar Status dos Containers
+
+```bash
+# Status dos containers
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml ps
+
+# Deve mostrar 2 containers rodando:
+# - habitus-db (PostgreSQL)
+# - habitus-backend (Flask)
+```
+
+### Passo 5: Verificar Recursos do Sistema
+
+```bash
+# Uso de CPU e memória
+docker stats
+
+# Espaço em disco
+df -h
+
+# Espaço usado pelo Docker
+docker system df
+```
+
+---
+
+## 📊 Monitoramento e Manutenção
+
+### Configurar Monitoramento de Erros (Sentry)
+
+1. Crie conta em https://sentry.io
+2. Crie um novo projeto (Flask/Python)
+3. Copie o DSN fornecido
+4. Adicione ao arquivo `.env`:
+
+```env
+SENTRY_DSN=https://seu-dsn-do-sentry@sentry.io/projeto
+```
+
+5. Reinicie o backend:
+
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart backend
+```
+
+### Backup do Banco de Dados
+
+#### Backup Manual
+
+```bash
+# Criar backup
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec db pg_dump -U habitus habitus_forecast > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Restaurar backup
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec -T db psql -U habitus habitus_forecast < backup_20250102_120000.sql
+```
+
+#### Backup Automático (Cron)
+
+```bash
+# Editar crontab
+crontab -e
+
+# Adicionar linha para backup diário às 2h da manhã
+0 2 * * * cd /var/www/habitus-forecast-system && docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec -T db pg_dump -U habitus habitus_forecast > backups/backup_$(date +\%Y\%m\%d).sql && find backups/ -name "backup_*.sql" -mtime +7 -delete
+```
+
+**Criar diretório de backups:**
+
+```bash
+mkdir -p /var/www/habitus-forecast-system/backups
+```
+
+### Atualizações Futuras
+
+```bash
+# 1. Fazer backup do banco de dados
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec db pg_dump -U habitus habitus_forecast > backup_antes_update_$(date +%Y%m%d).sql
+
+# 2. Atualizar código
+cd /var/www/habitus-forecast-system
+git pull origin main
+
+# 3. Rebuild do frontend (se necessário)
+cd frontend
+pnpm install --frozen-lockfile
+export VITE_API_URL=https://seu-dominio.com/api
+pnpm run build
+cd ..
+
+# 4. Rebuild e reiniciar containers
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml build
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# 5. Executar migrações (se houver)
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend alembic upgrade head
+
+# 6. Verificar logs
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs -f backend
+```
+
+### Limpeza de Recursos Docker
+
+```bash
+# Limpar imagens não utilizadas
+docker system prune -a
+
+# Limpar volumes não utilizados (CUIDADO: pode remover dados!)
+docker volume prune
+
+# Ver uso de recursos
+docker system df
+```
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Problema: "Permission denied" ao usar Docker
-
-**Solução:**
-```bash
-sudo usermod -aG docker $USER
-# Faça logout e login novamente
-```
-
----
-
 ### Problema: Container não inicia
 
 **Verificar logs:**
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs nome-do-container
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs backend
 ```
 
-**Reiniciar containers:**
+**Possíveis causas:**
+- Variáveis de ambiente não configuradas
+- Banco de dados não está acessível
+- Porta 5000 já está em uso
+- Erro nas migrações
+
+**Solução:**
 ```bash
+# Verificar variáveis de ambiente
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend env | grep -E "DATABASE_URL|SECRET_KEY"
+
+# Verificar se porta está em uso
+sudo lsof -i :5000
+
+# Reiniciar containers
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart
 ```
-
----
 
 ### Problema: Erro de conexão com banco de dados
 
@@ -596,120 +789,263 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs db
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend env | grep DATABASE
 ```
 
----
-
-### Problema: Porta 5000 já está em uso
-
-**Verificar o que está usando a porta:**
+**Solução:**
 ```bash
-sudo lsof -i :5000
-# ou
-sudo netstat -tulpn | grep 5000
+# Reiniciar banco de dados
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart db
+
+# Aguardar banco iniciar
+sleep 5
+
+# Testar conexão
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend python -c "from sqlalchemy import create_engine; engine = create_engine('$DATABASE_URL'); engine.connect()"
 ```
 
-**Parar processo ou mudar porta no .env**
+### Problema: Frontend não carrega
 
----
+**Verificar se build existe:**
+```bash
+ls -la backend/src/static/
+```
 
-### Problema: GitHub Actions não consegue conectar
+**Verificar configuração do Nginx:**
+```bash
+sudo nginx -t
+sudo cat /etc/nginx/sites-available/habitus-forecast | grep root
+```
+
+**Solução:**
+```bash
+# Rebuild do frontend
+cd frontend
+pnpm run build
+cd ..
+
+# Verificar se arquivos foram copiados
+ls -la backend/src/static/index.html
+
+# Reiniciar Nginx
+sudo systemctl reload nginx
+```
+
+### Problema: Erro 502 Bad Gateway
+
+**Causa:** Backend não está respondendo ou Nginx não consegue conectar.
 
 **Verificar:**
-1. Secrets estão configurados corretamente?
-2. Chave SSH pública está no servidor?
-3. Servidor está acessível pela internet?
-4. Firewall permite conexão SSH?
-
-**Testar conexão manualmente:**
 ```bash
-# No seu computador local
-ssh -i ~/.ssh/github_actions_deploy usuario@seu-servidor.com
+# Verificar se backend está rodando
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml ps backend
+
+# Testar backend diretamente
+curl http://localhost:5000/api/health
+
+# Verificar logs do backend
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs backend | tail -50
 ```
 
----
+**Solução:**
+```bash
+# Reiniciar backend
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart backend
+
+# Aguardar iniciar
+sleep 10
+
+# Verificar novamente
+curl http://localhost:5000/api/health
+```
+
+### Problema: Certificado SSL não renova
+
+**Verificar timer:**
+```bash
+sudo systemctl status certbot.timer
+```
+
+**Testar renovação:**
+```bash
+sudo certbot renew --dry-run
+```
+
+**Renovar manualmente:**
+```bash
+sudo certbot renew
+```
 
 ### Problema: Erro "No space left on device"
 
-**Limpar espaço:**
+**Verificar espaço em disco:**
 ```bash
-# Limpar imagens Docker não usadas
+df -h
+```
+
+**Limpar recursos Docker:**
+```bash
+# Limpar imagens não utilizadas
 docker system prune -a
+
+# Limpar volumes não utilizados (CUIDADO!)
+docker volume prune
 
 # Limpar logs antigos
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=0
 ```
 
----
+### Problema: Migrações falham
 
-## 📚 Comandos Úteis
-
-### Ver Status dos Containers
+**Verificar logs:**
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml ps
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs backend | grep -i migration
 ```
 
-### Ver Logs
+**Executar migrações manualmente:**
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs -f backend
-```
-
-### Reiniciar Aplicação
-```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart
-```
-
-### Parar Aplicação
-```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
-```
-
-### Atualizar Manualmente
-```bash
-cd /var/www/habitus-forecast-system
-git pull origin main
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend alembic upgrade head
 ```
 
-### Backup do Banco de Dados
+**Verificar histórico de migrações:**
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec db pg_dump -U habitus habitus_forecast > backup_$(date +%Y%m%d).sql
-```
-
-### Restaurar Backup
-```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec -T db psql -U habitus habitus_forecast < backup_20250102.sql
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend alembic history
 ```
 
 ---
 
-## ✅ Checklist Final
+## 🛠️ Comandos Úteis
+
+### Gerenciamento de Containers
+
+```bash
+# Ver status dos containers
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml ps
+
+# Ver logs em tempo real
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
+
+# Reiniciar todos os containers
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart
+
+# Parar todos os containers
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
+
+# Iniciar containers
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# Rebuild e reiniciar
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+### Banco de Dados
+
+```bash
+# Conectar ao banco de dados
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec db psql -U habitus habitus_forecast
+
+# Listar tabelas
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec db psql -U habitus habitus_forecast -c "\dt"
+
+# Backup
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec db pg_dump -U habitus habitus_forecast > backup.sql
+
+# Restaurar
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec -T db psql -U habitus habitus_forecast < backup.sql
+```
+
+### Migrações
+
+```bash
+# Executar migrações
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend alembic upgrade head
+
+# Ver histórico
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend alembic history
+
+# Criar nova migration
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml exec backend alembic revision --autogenerate -m "descricao"
+```
+
+### Nginx
+
+```bash
+# Testar configuração
+sudo nginx -t
+
+# Recarregar configuração
+sudo systemctl reload nginx
+
+# Reiniciar Nginx
+sudo systemctl restart nginx
+
+# Ver logs
+sudo tail -f /var/log/nginx/habitus-forecast-access.log
+sudo tail -f /var/log/nginx/habitus-forecast-error.log
+```
+
+### Monitoramento
+
+```bash
+# Uso de recursos dos containers
+docker stats
+
+# Espaço em disco usado pelo Docker
+docker system df
+
+# Ver processos rodando
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml top
+```
+
+---
+
+## ✅ Checklist Final de Deploy
+
+Antes de considerar o deploy completo, verifique:
 
 - [ ] Servidor preparado (Docker, Git, Node.js instalados)
-- [ ] Chave SSH gerada e configurada
-- [ ] Repositório clonado
-- [ ] Arquivo `.env` configurado
-- [ ] Containers rodando
-- [ ] Migrações executadas
-- [ ] Health check funcionando
-- [ ] GitHub Secrets configurados
-- [ ] Deploy automático testado
+- [ ] Repositório clonado em `/var/www/habitus-forecast-system`
+- [ ] Arquivo `.env` configurado com todas as variáveis obrigatórias
+- [ ] SECRET_KEY gerada e configurada (mínimo 32 caracteres)
+- [ ] DATABASE_URL configurada corretamente
+- [ ] CORS_ORIGINS configurado com domínio de produção
+- [ ] VITE_API_URL configurada antes do build do frontend
+- [ ] Frontend buildado e arquivos em `backend/src/static/`
+- [ ] Containers Docker rodando (`docker-compose ps`)
+- [ ] Migrações executadas com sucesso
+- [ ] Health check respondendo (`/api/health`)
+- [ ] Nginx instalado e configurado
+- [ ] Certificado SSL obtido e configurado
+- [ ] HTTPS funcionando (`https://seu-dominio.com`)
+- [ ] Redirecionamento HTTP → HTTPS funcionando
+- [ ] Frontend carregando corretamente
+- [ ] Login funcionando (credenciais padrão)
+- [ ] Backup do banco de dados configurado
+- [ ] Monitoramento configurado (Sentry, se aplicável)
+- [ ] Logs sendo gerados corretamente
+- [ ] Firewall configurado (portas 80, 443 abertas)
 
 ---
 
-## 🎉 Pronto!
+## 📚 Documentação Relacionada
 
-Sua aplicação está rodando em produção! 
-
-A partir de agora, qualquer push para a branch `main` no GitHub vai fazer deploy automático.
-
-**Próximos passos recomendados:**
-- Configurar domínio e HTTPS (veja `docs/HTTPS_SETUP.md`)
-- Configurar backup automático do banco de dados
-- Configurar monitoramento (Sentry, UptimeRobot, etc.)
+- `README.md` - Documentação geral do projeto
+- `docs/API.md` - Documentação da API
+- `docs/SECURITY.md` - Guia de segurança
+- `docs/MONITORAMENTO.md` - Guia de monitoramento
+- `docs/HTTPS_SETUP.md` - Guia detalhado de HTTPS
+- `env.production.example` - Exemplo de variáveis de ambiente
 
 ---
 
-**Última atualização:** 2025-01-XX
+## 🆘 Suporte
 
-**Dúvidas?** Consulte a documentação em `docs/` ou abra uma issue no GitHub.
+Se encontrar problemas não cobertos neste guia:
 
+1. Verifique os logs: `docker-compose logs`
+2. Consulte a documentação em `docs/`
+3. Abra uma issue no GitHub
+4. Verifique o status dos serviços: `docker-compose ps`
+
+---
+
+**Última atualização:** 2025-01-XX  
+**Versão do guia:** 2.0  
+**Mantido por:** Equipe Habitus Forecast

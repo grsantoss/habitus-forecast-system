@@ -15,19 +15,10 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # Em produção, SECRET_KEY é obrigatória e não deve ter fallback
 SECRET_KEY = os.getenv('SECRET_KEY')
 if not SECRET_KEY:
-    flask_env = os.getenv('FLASK_ENV', 'development')
-    if flask_env == 'production':
-        raise ValueError(
-            'SECRET_KEY deve ser configurada em produção! '
-            'Configure a variável de ambiente SECRET_KEY antes de iniciar a aplicação.'
-        )
-    # Fallback apenas para desenvolvimento (NUNCA usar em produção)
-    SECRET_KEY = 'habitus_secret_key_2025_dev_only_never_use_in_production'
-    import warnings
-    warnings.warn(
-        '⚠️ SECRET_KEY não configurada! Usando valor padrão de desenvolvimento. '
-        'Configure SECRET_KEY em produção!',
-        UserWarning
+    raise ValueError(
+        'SECRET_KEY deve ser configurada! '
+        'Configure a variável de ambiente SECRET_KEY antes de iniciar a aplicação. '
+        'Para desenvolvimento local, crie um arquivo .env com SECRET_KEY=<sua-chave-secreta>'
     )
 
 ALGORITHM = "HS256"

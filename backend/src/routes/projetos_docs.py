@@ -22,19 +22,64 @@ try:
             Listar todos os projetos do usuário
             
             Retorna lista de projetos associados ao usuário autenticado.
+            
+            **Resposta (200):**
+            ```json
+            {
+              "projetos": [
+                {
+                  "id": 1,
+                  "nome_cliente": "Cliente ABC",
+                  "data_base_estudo": "2024-01-01",
+                  ...
+                }
+              ]
+            }
+            ```
+            
+            **Importante:** A resposta está encapsulada na chave "projetos".
+            Extrair o array projetos antes de iterar.
             """
             pass
         
         @projetos_ns.doc(security='Bearer Auth')
         @projetos_ns.expect(projeto_create_schema)
         @projetos_ns.marshal_with(projeto_schema, code=201)
-        @projetos_ns.response(400, 'Dados inválidos')
+        @projetos_ns.response(400, 'Dados inválidos - campos obrigatórios: nome_cliente, data_base_estudo')
         @projetos_ns.response(401, 'Não autenticado')
         def post(self):
             """
             Criar novo projeto
             
             Cria um novo projeto financeiro associado ao usuário autenticado.
+            
+            **Campos Obrigatórios:**
+            - nome_cliente (string): Nome do cliente (NÃO usar "nome")
+            - data_base_estudo (string): Data no formato YYYY-MM-DD (NÃO usar "data_base")
+            
+            **Exemplo de Request:**
+            ```json
+            {
+              "nome_cliente": "Cliente ABC",
+              "data_base_estudo": "2024-01-01",
+              "saldo_inicial_caixa": 0
+            }
+            ```
+            
+            **Resposta (201):**
+            ```json
+            {
+              "message": "Projeto criado com sucesso",
+              "projeto": {
+                "id": 1,
+                "nome_cliente": "Cliente ABC",
+                ...
+              }
+            }
+            ```
+            
+            **Importante:** A resposta está encapsulada na chave "projeto".
+            Extrair o objeto projeto antes de acessar campos como id.
             """
             pass
     
@@ -78,8 +123,48 @@ try:
         @cenarios_ns.doc(security='Bearer Auth')
         @cenarios_ns.expect(cenario_create_schema)
         @cenarios_ns.marshal_with(cenario_schema, code=201)
+        @cenarios_ns.response(400, 'Dados inválidos')
+        @cenarios_ns.response(404, 'Projeto não encontrado')
         def post(self, projeto_id):
-            """Criar novo cenário para um projeto"""
+            """
+            Criar novo cenário para um projeto
+            
+            **URL:** POST /api/projetos/{projeto_id}/cenarios
+            (NÃO usar /api/cenarios/projetos/{projeto_id}/cenarios)
+            
+            **Campos Obrigatórios:**
+            - nome (string): Nome do cenário
+            
+            **Campos Opcionais:**
+            - descricao (string): Descrição do cenário
+            - is_active (boolean): Se o cenário está ativo
+            
+            **Exemplo de Request:**
+            ```json
+            {
+              "nome": "Cenário Realista",
+              "descricao": "Cenário baseado em projeções realistas",
+              "is_active": true
+            }
+            ```
+            
+            **Resposta (201):**
+            ```json
+            {
+              "message": "Cenário criado com sucesso",
+              "cenario": {
+                "id": 1,
+                "nome": "Cenário Realista",
+                ...
+              }
+            }
+            ```
+            
+            **Importante:** 
+            - A resposta está encapsulada na chave "cenario"
+            - NÃO usar campos "tipo" ou "percentual_vendas" (não existem)
+            - Usar "is_active" ao invés de "ativo"
+            """
             pass
     
     @cenarios_ns.route('/cenarios/<int:cenario_id>')

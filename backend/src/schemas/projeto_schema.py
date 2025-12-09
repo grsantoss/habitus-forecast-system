@@ -15,15 +15,15 @@ projeto_schema = Model('Projeto', {
     'percentual_custo_fixo': fields.Float(description='Percentual de custo fixo'),
     'created_at': fields.DateTime(description='Data de criação'),
     'updated_at': fields.DateTime(description='Data de atualização'),
-})
+}, description='GET /api/projetos retorna {"projetos": [...]}. POST /api/projetos retorna {"projeto": {...}}')
 
 # Schema para criação de projeto
 projeto_create_schema = Model('ProjetoCreate', {
-    'nome_cliente': fields.String(required=True, description='Nome do cliente'),
-    'data_base_estudo': fields.Date(required=True, description='Data base do estudo (YYYY-MM-DD)'),
-    'saldo_inicial_caixa': fields.Float(required=True, description='Saldo inicial de caixa'),
+    'nome_cliente': fields.String(required=True, description='Nome do cliente (OBRIGATÓRIO - não usar "nome")'),
+    'data_base_estudo': fields.String(required=True, description='Data base do estudo no formato YYYY-MM-DD (OBRIGATÓRIO - não usar "data_base")'),
+    'saldo_inicial_caixa': fields.Float(required=False, default=0, description='Saldo inicial de caixa'),
     'ponto_equilibrio': fields.Float(description='Ponto de equilíbrio'),
-})
+}, description='Campos obrigatórios: nome_cliente, data_base_estudo. Resposta contém {"message": "...", "projeto": {...}}')
 
 # Schema para atualização de projeto
 projeto_update_schema = Model('ProjetoUpdate', {
@@ -45,10 +45,10 @@ cenario_schema = Model('Cenario', {
 
 # Schema para criação de cenário
 cenario_create_schema = Model('CenarioCreate', {
-    'nome': fields.String(required=True, description='Nome do cenário (Pessimista, Realista, Otimista, Agressivo)'),
+    'nome': fields.String(required=True, description='Nome do cenário (OBRIGATÓRIO)'),
     'descricao': fields.String(description='Descrição do cenário'),
-    'is_active': fields.Boolean(default=False, description='Cenário ativo'),
-})
+    'is_active': fields.Boolean(default=False, description='Cenário ativo (não usar "tipo" ou "percentual_vendas")'),
+}, description='URL: POST /api/projetos/{projeto_id}/cenarios (não /api/cenarios/projetos/{id}/cenarios). Resposta contém {"cenario": {...}}')
 
 # Schema para atualização de cenário
 cenario_update_schema = Model('CenarioUpdate', {

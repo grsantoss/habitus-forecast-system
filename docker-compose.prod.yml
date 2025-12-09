@@ -7,7 +7,7 @@ services:
   backend:
     # Em produção, não montar volumes de código
     volumes:
-      - ./backend/uploads:/app/uploads:ro
+      - ./backend/uploads:/app/uploads
       - backend_logs:/app/logs
     environment:
       FLASK_ENV: production
@@ -16,8 +16,16 @@ services:
     # Não usar hot reload em produção
     command: >
       sh -c "
-        alembic upgrade head &&
-        gunicorn --config gunicorn_config.py wsgi:application
+        echo '🔄 Executando migrações do banco de dados...' &&
+        if bash scripts/run_migrations.sh; then
+          echo '🚀 Iniciando servidor Gunicorn...' &&
+          gunicorn --config gunicorn_config.py wsgi:application
+        else
+          echo '❌ ERRO: Falha ao executar migrações!' >&2 &&
+          echo '   Verifique os logs acima para mais detalhes.' >&2 &&
+          echo '   A aplicação não será iniciada até que as migrações sejam corrigidas.' >&2 &&
+          exit 1
+        fi
       "
     restart: always
 

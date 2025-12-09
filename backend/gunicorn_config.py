@@ -16,8 +16,9 @@ workers = int(os.getenv('WORKERS', multiprocessing.cpu_count() * 2 + 1))
 # 'gevent' ou 'eventlet' para aplicações assíncronas
 worker_class = os.getenv('WORKER_CLASS', 'sync')
 
-# Timeout em segundos
-timeout = int(os.getenv('TIMEOUT', '120'))
+# Timeout em segundos (aumentado para suportar uploads grandes de até 16MB)
+# Uploads grandes podem levar mais tempo, especialmente em conexões lentas
+timeout = int(os.getenv('TIMEOUT', '300'))  # 5 minutos padrão
 
 # Keep-alive timeout
 keepalive = int(os.getenv('KEEPALIVE', '5'))

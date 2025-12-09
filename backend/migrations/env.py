@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
 
 # Importar os modelos e a instância do db
-from src.models.user import db
+from src.models.user import db, Relatorio, TokenBlacklist  # Importar modelos para que sejam detectados
 from src.main import app
 
 # this is the Alembic Config object, which provides

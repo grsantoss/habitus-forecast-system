@@ -16,7 +16,7 @@ user_schema = Model('User', {
     'cargo': fields.String(description='Cargo do usuário'),
     'created_at': fields.DateTime(description='Data de criação'),
     'updated_at': fields.DateTime(description='Data de atualização'),
-})
+}, description='GET /api/auth/me retorna {"user": {...}}. Extrair objeto user antes de acessar campos')
 
 # Schema para criação de usuário
 user_create_schema = Model('UserCreate', {
@@ -52,18 +52,18 @@ login_schema = Model('Login', {
 login_response_schema = Model('LoginResponse', {
     'access_token': fields.String(required=True, description='Token JWT de acesso'),
     'token_type': fields.String(required=True, default='bearer', description='Tipo do token'),
-    'user': fields.Nested(user_schema, description='Dados do usuário'),
-})
+    'user': fields.Nested(user_schema, required=True, description='Dados do usuário autenticado'),
+}, description='Resposta de login contém access_token, token_type e objeto user')
 
 # Schema de registro
 register_schema = Model('Register', {
-    'nome': fields.String(required=True, description='Nome completo'),
-    'email': fields.String(required=True, description='Email do usuário'),
-    'password': fields.String(required=True, description='Senha'),
+    'nome': fields.String(required=True, description='Nome completo (OBRIGATÓRIO)'),
+    'email': fields.String(required=True, description='Email do usuário (OBRIGATÓRIO)'),
+    'password': fields.String(required=True, description='Senha (OBRIGATÓRIO)'),
     'role': fields.String(enum=['admin', 'usuario'], default='usuario', description='Papel do usuário'),
     'telefone': fields.String(description='Telefone'),
     'empresa': fields.String(description='Nome da empresa'),
     'cnpj': fields.String(description='CNPJ da empresa'),
     'cargo': fields.String(description='Cargo do usuário'),
-})
+}, description='Campos obrigatórios: nome, email, password. Resposta contém {"message": "...", "user": {...}}')
 

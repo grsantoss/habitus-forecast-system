@@ -48,11 +48,15 @@ const Dashboard = () => {
   useEffect(() => {
     loadDashboardData();
 
-    // Para usuário comum, carregar cenários do próprio usuário.
-    // Para admin, os cenários serão carregados quando um cliente for selecionado
-    // (via useEffect que observa selectedClientId).
+    // Carregar cenários do usuário
+    // Para usuário comum: carregar cenários do próprio usuário
+    // Para admin: carregar cenários próprios se não tiver cliente selecionado,
+    // ou cenários do cliente quando um cliente for selecionado
     if (user?.role !== 'admin') {
       loadScenarios();
+    } else {
+      // Admin: carregar cenários próprios se não tiver cliente selecionado
+      loadScenarios(null);
     }
     
     // Definir data-base padrão como mês atual
@@ -64,7 +68,6 @@ const Dashboard = () => {
     
     // Listener para exclusão de arquivos
     const handleUploadDeleted = (event) => {
-      console.log('Arquivo excluído, recarregando dados do dashboard');
       loadDashboardData();
     };
     
@@ -103,7 +106,6 @@ const Dashboard = () => {
 
   // useEffect específico para carregar saldo inicial
   useEffect(() => {
-    console.log('=== USEEFFECT SALDO INICIAL ===');
     loadSaldoInicial();
   }, []);
 
@@ -130,8 +132,8 @@ const Dashboard = () => {
     // É necessário ter um projeto selecionado
     if (!selectedProject) return;
 
-    // Para admin, também é necessário ter um cliente selecionado
-    if (user?.role === 'admin' && !selectedClientId) return;
+    // Admin pode usar seus próprios cenários quando não tem cliente selecionado
+    // Não precisa bloquear o recarregamento
 
     loadProjectData(selectedProject);
     setChartKey(prev => prev + 1);
@@ -176,7 +178,6 @@ const Dashboard = () => {
         );
         const projetoMaisRecente = projetosOrdenados[0];
         setSelectedProject(projetoMaisRecente.id);
-        console.log('Projeto mais recente selecionado:', projetoMaisRecente);
       } else {
         // Se não há projetos, limpar localStorage e não selecionar nenhum projeto
         localStorage.removeItem('lastUploadedProjectId');
@@ -215,10 +216,8 @@ const Dashboard = () => {
 
   // Função para lidar com mudança de seleção do projeto
   const handleProjectSelectChange = (projectId) => {
-    console.log('Projeto selecionado:', projectId);
     const selectedProj = allProjects.find(p => p.id === parseInt(projectId));
     if (selectedProj) {
-      console.log('Projeto encontrado:', selectedProj);
       setSelectedProject(selectedProj.id);
       loadProjectData(selectedProj.id);
       // Forçar re-render do gráfico
@@ -229,7 +228,6 @@ const Dashboard = () => {
   // Função para carregar saldo inicial
   const loadSaldoInicial = async () => {
     try {
-      console.log('=== CARREGANDO SALDO INICIAL ===');
       const usuarioId = user?.role === 'admin' ? selectedClientId : null;
 
       // Para admin sem cliente selecionado, limpar campos e não chamar API
@@ -242,23 +240,14 @@ const Dashboard = () => {
         return;
       }
 
-      console.log('Chamando dashboardAPI.getSaldoInicial()...');
       const response = await dashboardAPI.getSaldoInicial(usuarioId);
-      console.log('Resposta completa da API:', response);
-      console.log('Dados da resposta:', response.data);
       
       const saldo = response.data.saldo_inicial || 0;
-      console.log('Saldo inicial extraído:', saldo);
-      console.log('Tipo do saldo:', typeof saldo);
-      
       setSaldoInicial(saldo);
-      console.log('Estado saldoInicial atualizado para:', saldo);
       
       // Garantir que o saldo seja um número
       const saldoNumerico = typeof saldo === 'number' ? saldo : parseFloat(saldo) || 0;
       const saldoFormatado = formatCurrency(saldoNumerico);
-      console.log('Saldo numérico:', saldoNumerico);
-      console.log('Saldo formatado:', saldoFormatado);
       
       setSaldoInicialCaixa(saldoFormatado);
       setSaldoInicialFixo(saldoFormatado); // Definir valor fixo também
@@ -268,10 +257,6 @@ const Dashboard = () => {
       const pontoEquilibrioFormatado = formatCurrency(pontoEquilibrio);
       setPontoEquilibrioReais(pontoEquilibrioFormatado);
       setPontoEquilibrioFixo(pontoEquilibrioFormatado);
-      
-      console.log('Estado saldoInicialCaixa definido para:', saldoFormatado);
-      console.log('Estado pontoEquilibrioReais definido para:', pontoEquilibrioFormatado);
-      console.log('=== FIM CARREGAMENTO SALDO INICIAL ===');
     } catch (error) {
       console.error('Erro ao carregar saldo inicial:', error);
       console.error('Detalhes do erro:', error.response?.data);
@@ -280,11 +265,9 @@ const Dashboard = () => {
 
   // Função para limpar o campo de saldo inicial
   const limparSaldoInicial = () => {
-    console.log('=== LIMPANDO SALDO INICIAL ===');
     setSaldoInicial(0);
     setSaldoInicialCaixa('');
     setSaldoInicialFixo(''); // Limpar valor fixo também
-    console.log('Campo de saldo inicial limpo');
     
     // Atualizar no backend também
     updateSaldoInicial(0);
@@ -293,22 +276,14 @@ const Dashboard = () => {
   // Função para atualizar saldo inicial
   const updateSaldoInicial = async (novoSaldo) => {
     try {
-      console.log('=== ATUALIZANDO SALDO INICIAL ===');
-      console.log('Novo saldo:', novoSaldo);
-      console.log('Projeto selecionado:', selectedProject);
 
       const usuarioId = user?.role === 'admin' ? selectedClientId : null;
       const response = await dashboardAPI.updateSaldoInicial(novoSaldo, usuarioId);
       setSaldoInicial(novoSaldo);
-      console.log('Saldo inicial atualizado:', response.data);
       
       // Recarregar dados do projeto para atualizar o gráfico
       if (selectedProject) {
-        console.log('Recarregando dados do projeto...');
         await loadProjectData(selectedProject);
-        console.log('Dados do projeto recarregados');
-      } else {
-        console.log('Nenhum projeto selecionado, não recarregando dados');
       }
     } catch (error) {
       console.error('Erro ao atualizar saldo inicial:', error);
@@ -323,7 +298,8 @@ const Dashboard = () => {
           ? `?usuario_id=${usuarioId}`
           : '';
 
-      const response = await fetch(`http://localhost:5000/api/settings/cenarios${qs}`, {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${apiUrl}/settings/cenarios${qs}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -337,7 +313,6 @@ const Dashboard = () => {
           otimista: data.otimista || 0,
           agressivo: data.agressivo || 0
         });
-        console.log('Cenários carregados:', data);
       } else if (response.status === 401) {
         localStorage.removeItem('token');
         window.location.href = '/login';
@@ -411,14 +386,9 @@ const Dashboard = () => {
   // Função para atualizar ponto de equilíbrio no backend
   const updatePontoEquilibrio = async (novoPontoEquilibrio) => {
     try {
-      console.log('=== ATUALIZANDO PONTO EQUILÍBRIO ===');
-      console.log('Chamando dashboardAPI.updatePontoEquilibrio com:', novoPontoEquilibrio);
 
       const usuarioId = user?.role === 'admin' ? selectedClientId : null;
-      const response = await dashboardAPI.updatePontoEquilibrio(novoPontoEquilibrio, usuarioId);
-      console.log('Resposta da API:', response.data);
-      
-      console.log('=== FIM ATUALIZAÇÃO PONTO EQUILÍBRIO ===');
+      await dashboardAPI.updatePontoEquilibrio(novoPontoEquilibrio, usuarioId);
     } catch (error) {
       console.error('Erro ao atualizar ponto de equilíbrio:', error);
       console.error('Detalhes do erro:', error.response?.data);
@@ -444,30 +414,23 @@ const Dashboard = () => {
     
     // 1. Interpretar o valor digitado pelo usuário para obter o número real
     const interpretedAmount = interpretUserValue(stringValue);
-    console.log('Valor interpretado (numérico):', interpretedAmount);
     
     // 2. Validar o valor interpretado
     if (interpretedAmount > 1000000) {
-      console.log('Valor excede limite de R$ 1.000.000,00');
       alert('O saldo inicial não pode ser maior que R$ 1.000.000,00');
       return; // Impede a atualização
     } else if (interpretedAmount < 0) {
-      console.log('Valor não pode ser negativo');
       alert('O saldo inicial não pode ser negativo');
       return; // Impede a atualização
     }
     
-    console.log('Valor aprovado na validação:', interpretedAmount);
-    
     // 3. Durante a digitação: não aplicar máscara para permitir valores expressivos
     setSaldoInicialCaixa(stringValue);
     setSaldoInicialFixo(formatCurrency(interpretedAmount)); // Definir valor fixo
-    console.log('Estado saldoInicialCaixa atualizado (sem máscara):', stringValue);
     
     // 4. Usar debounce para evitar múltiplas chamadas de API
     clearTimeout(window.saldoInicialTimeout);
     window.saldoInicialTimeout = setTimeout(() => {
-      console.log('Chamando updateSaldoInicial com:', interpretedAmount);
       updateSaldoInicial(interpretedAmount);
     }, 500); // Aguardar 500ms após o usuário parar de digitar
   }, [saldoInicialCaixa, interpretUserValue, formatCurrency, updateSaldoInicial]);
@@ -553,8 +516,6 @@ const Dashboard = () => {
         fdc_real: 0,
         saldo: 0
       };
-      
-      console.log(`Mês ${index + 1} (${monthStr}):`, result);
       return result;
     });
     
@@ -563,8 +524,6 @@ const Dashboard = () => {
       ...item,
       fdc_real: item.fdc_real || 0
     }));
-
-    console.log('Dados finais do gráfico:', finalData);
     return finalData;
   };
 
@@ -709,18 +668,15 @@ const Dashboard = () => {
                 pattern="[0-9.,R$\s]*"
                 value={saldoInicialCaixa}
                 onChange={(e) => {
-                  console.log('Input onChange chamado com:', e.target.value);
                   handleSaldoInicialChange(e.target.value);
                 }}
                 onFocus={(e) => {
-                  console.log('Input onFocus - valor atual:', e.target.value);
                   // Remover máscara ao focar para permitir edição contínua
                   const raw = interpretUserValue(e.target.value);
                   const rawStr = raw === 0 ? '' : String(e.target.value);
                   setSaldoInicialCaixa(rawStr);
                 }}
                 onBlur={(e) => {
-                  console.log('Input onBlur - valor final:', e.target.value);
                   // Reaplicar máscara ao sair do campo
                   const amount = interpretUserValue(e.target.value);
                   setSaldoInicialCaixa(formatCurrency(amount));
@@ -731,7 +687,6 @@ const Dashboard = () => {
               {saldoInicialFixo && (
                 <button
                   onClick={() => {
-                    console.log('Botão limpar clicado');
                     limparSaldoInicial();
                   }}
                   className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"

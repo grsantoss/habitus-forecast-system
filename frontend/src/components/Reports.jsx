@@ -39,6 +39,7 @@ const Reports = () => {
   const [loading, setLoading] = useState(true);
   const [loadingScenarios, setLoadingScenarios] = useState(false);
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [viewingReport, setViewingReport] = useState(null);
   
   // Filtros e busca
   const [searchTerm, setSearchTerm] = useState('');
@@ -61,7 +62,6 @@ const Reports = () => {
   // Estatísticas
   const [stats, setStats] = useState({
     total: 0,
-    agendados: 0,
     downloads: 0,
     espacoUsado: 0
   });
@@ -91,7 +91,8 @@ const Reports = () => {
 
   useEffect(() => {
     fetchScenarios();
-    loadReportsFromStorage();
+    fetchReports();
+    migrateLocalStorageReports();
   }, []);
 
   useEffect(() => {
@@ -108,6 +109,20 @@ const Reports = () => {
       toast.error('Erro ao carregar cenários');
     } finally {
       setLoadingScenarios(false);
+    }
+  };
+
+  const fetchReports = async () => {
+    try {
+      setLoading(true);
+      const response = await projectsAPI.listReports();
+      setReports(response.data.relatorios || []);
+    } catch (err) {
+      console.error('Erro ao buscar relatórios:', err);
+      toast.error('Erro ao carregar relatórios');
+      // Fallback para localStorage em caso de erro
+      loadReportsFromStorage();
+    } finally {
       setLoading(false);
     }
   };
@@ -116,26 +131,100 @@ const Reports = () => {
     try {
       const savedReports = localStorage.getItem('reports_history');
       if (savedReports) {
-        setReports(JSON.parse(savedReports));
+        const parsedReports = JSON.parse(savedReports);
+        setReports(parsedReports);
       }
     } catch (err) {
       console.error('Erro ao carregar histórico de relatórios:', err);
     }
   };
 
-  const saveReportToStorage = (newReport) => {
+  const migrateLocalStorageReports = async () => {
     try {
-      const updatedReports = [newReport, ...reports];
-      localStorage.setItem('reports_history', JSON.stringify(updatedReports));
-      setReports(updatedReports);
+      const savedReports = localStorage.getItem('reports_history');
+      if (!savedReports) return;
+      
+      const parsedReports = JSON.parse(savedReports);
+      if (!Array.isArray(parsedReports) || parsedReports.length === 0) return;
+      
+      // Verificar se já migrou (flag no localStorage)
+      const migrationFlag = localStorage.getItem('reports_migrated_to_backend');
+      if (migrationFlag === 'true') return;
+      
+      // Migrar relatórios para o backend
+      for (const report of parsedReports) {
+        try {
+          await projectsAPI.createReport({
+            title: report.title,
+            type: report.type,
+            template: report.template || 'detailed',
+            scenario: report.scenario,
+            scenarioId: report.scenarioId,
+            scenarioIds: report.scenarioIds,
+            size: report.size,
+            pages: report.pages,
+            sheets: report.sheets,
+            downloads: report.downloads || 0,
+            status: report.status || 'completed',
+            periodo: report.periodo || 'todos',
+            descricao: report.descricao || ''
+          });
+        } catch (err) {
+          console.error('Erro ao migrar relatório:', err);
+          // Continuar com os próximos mesmo se um falhar
+        }
+      }
+      
+      // Marcar como migrado
+      localStorage.setItem('reports_migrated_to_backend', 'true');
+      
+      // Recarregar relatórios do backend
+      await fetchReports();
     } catch (err) {
-      console.error('Erro ao salvar relatório:', err);
+      console.error('Erro ao migrar relatórios:', err);
+    }
+  };
+
+  const saveReportToBackend = async (newReport) => {
+    try {
+      const response = await projectsAPI.createReport({
+        title: newReport.title,
+        type: newReport.type,
+        template: newReport.template,
+        scenario: newReport.scenario,
+        scenarioId: newReport.scenarioId,
+        scenarioIds: newReport.scenarioIds,
+        size: newReport.size,
+        pages: newReport.pages ? parseInt(newReport.pages) : null,
+        sheets: newReport.sheets ? parseInt(newReport.sheets) : null,
+        downloads: newReport.downloads || 1,
+        status: newReport.status || 'completed',
+        periodo: newReport.periodo || 'todos',
+        descricao: newReport.descricao || ''
+      });
+      
+      // Adicionar à lista local
+      setReports([response.data.relatorio, ...reports]);
+      return response.data.relatorio;
+    } catch (err) {
+      console.error('Erro ao salvar relatório no backend:', err);
+      toast.error('Erro ao salvar relatório. Tentando salvar localmente...');
+      
+      // Fallback para localStorage
+      try {
+        const updatedReports = [newReport, ...reports];
+        localStorage.setItem('reports_history', JSON.stringify(updatedReports));
+        setReports(updatedReports);
+      } catch (storageErr) {
+        console.error('Erro ao salvar no localStorage:', storageErr);
+      }
+      
+      return newReport;
     }
   };
 
   const calculateStats = () => {
     const total = reports.length;
-    const agendados = reports.filter(r => r.type === 'scheduled').length;
     const downloads = reports.reduce((sum, r) => sum + (r.downloads || 0), 0);
     const espacoUsado = reports.reduce((sum, r) => {
       if (r.size) {
@@ -145,10 +234,11 @@ const Reports = () => {
       return sum;
     }, 0);
 
-    setStats({ total, agendados, downloads, espacoUsado });
+    setStats({ total, downloads, espacoUsado });
   };
 
   const handleGenerateReport = async () => {
+    // Validação do nome
     if (!reportForm.nome.trim()) {
       toast.error('O nome do relatório é obrigatório');
       return;
@@ -160,9 +250,23 @@ const Reports = () => {
         toast.error('Selecione pelo menos 2 cenários para comparar');
         return;
       }
+      
+      // Validar se os cenários selecionados ainda existem
+      const selectedScenarios = scenarios.filter(s => reportForm.cenarioIds.includes(s.id.toString()));
+      if (selectedScenarios.length !== reportForm.cenarioIds.length) {
+        toast.error('Um ou mais cenários selecionados não foram encontrados. Por favor, recarregue a página.');
+        return;
+      }
     } else {
       if (!reportForm.cenarioId) {
         toast.error('Selecione um cenário');
+        return;
+      }
+      
+      // Validar se o cenário existe
+      const selectedScenario = scenarios.find(s => s.id === parseInt(reportForm.cenarioId));
+      if (!selectedScenario) {
+        toast.error('Cenário selecionado não foi encontrado. Por favor, recarregue a página.');
         return;
       }
     }
@@ -187,6 +291,16 @@ const Reports = () => {
           reportForm.template
         );
       }
+      
+      // Validar se a resposta contém dados
+      if (!response.data || response.data.size === 0) {
+        toast.error('O relatório gerado está vazio. Verifique se há lançamentos no cenário selecionado.');
+        return;
+      }
+      
+      // Ler metadados dos headers HTTP
+      const numPages = response.headers['x-report-pages'] || null;
+      const numSheets = response.headers['x-report-sheets'] || null;
       
       // Criar blob e fazer download
       const blob = new Blob([response.data], {
@@ -235,15 +349,15 @@ const Reports = () => {
         scenarioId: reportForm.template === 'comparison' ? null : parseInt(reportForm.cenarioId),
         scenarioIds: reportForm.template === 'comparison' ? reportForm.cenarioIds.map(id => parseInt(id)) : null,
         size: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
-        pages: reportForm.formato === 'pdf' ? '12' : null,
-        sheets: reportForm.formato === 'excel' ? '5' : null,
+        pages: reportForm.formato === 'pdf' ? (numPages ? parseInt(numPages) : null) : null,
+        sheets: reportForm.formato === 'excel' ? (numSheets ? parseInt(numSheets) : null) : null,
         downloads: 1,
         status: 'completed',
         periodo: reportForm.periodo,
         descricao: reportForm.descricao
       };
       
-      saveReportToStorage(newReport);
+      await saveReportToBackend(newReport);
       
       // Resetar formulário
       setReportForm({
@@ -260,7 +374,32 @@ const Reports = () => {
       toast.success('Relatório gerado e baixado com sucesso!');
     } catch (err) {
       console.error('Erro ao gerar relatório:', err);
-      toast.error(err.response?.data?.message || 'Erro ao gerar relatório. Tente novamente.');
+      
+      // Tratamento de erros específicos
+      let errorMessage = 'Erro ao gerar relatório. Tente novamente.';
+      
+      if (err.response) {
+        // Erro do servidor
+        const status = err.response.status;
+        const message = err.response.data?.message || '';
+        
+        if (status === 400) {
+          errorMessage = message || 'Dados inválidos. Verifique os parâmetros selecionados.';
+        } else if (status === 403) {
+          errorMessage = 'Você não tem permissão para gerar este relatório.';
+        } else if (status === 404) {
+          errorMessage = 'Cenário ou projeto não encontrado.';
+        } else if (status === 500) {
+          errorMessage = 'Erro interno do servidor. Tente novamente mais tarde.';
+        } else if (message) {
+          errorMessage = message;
+        }
+      } else if (err.request) {
+        // Erro de rede
+        errorMessage = 'Erro de conexão. Verifique sua internet e tente novamente.';
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setGeneratingReport(false);
     }
@@ -270,7 +409,7 @@ const Reports = () => {
     // Verificar se é relatório comparativo
     if (report.template === 'comparison') {
       if (!report.scenarioIds || report.scenarioIds.length < 2) {
-        toast.error('IDs de cenários não encontrados para este relatório comparativo');
+        toast.error('IDs de cenários não encontrados para este relatório comparativo. O relatório pode ter sido criado com dados inválidos.');
         return;
       }
       
@@ -280,6 +419,12 @@ const Reports = () => {
           report.type,
           report.periodo || 'todos'
         );
+        
+        // Validar resposta
+        if (!response.data || response.data.size === 0) {
+          toast.error('O relatório está vazio. Os cenários podem não ter mais lançamentos.');
+          return;
+        }
         
         const blob = new Blob([response.data], {
           type: report.type === 'pdf' 
@@ -294,26 +439,63 @@ const Reports = () => {
         link.click();
         window.URL.revokeObjectURL(url);
         
-        // Atualizar contador de downloads
-        const updatedReports = reports.map(r => 
-          r.id === report.id 
-            ? { ...r, downloads: (r.downloads || 0) + 1 }
-            : r
-        );
-        setReports(updatedReports);
-        localStorage.setItem('reports_history', JSON.stringify(updatedReports));
+        // Atualizar contador de downloads no backend
+        try {
+          const newDownloadCount = (report.downloads || 0) + 1;
+          await projectsAPI.updateReport(report.id, { downloads: newDownloadCount });
+          
+          // Atualizar lista local
+          const updatedReports = reports.map(r => 
+            r.id === report.id 
+              ? { ...r, downloads: newDownloadCount }
+              : r
+          );
+          setReports(updatedReports);
+        } catch (err) {
+          console.error('Erro ao atualizar downloads:', err);
+          // Atualizar localmente mesmo se falhar no backend
+          const updatedReports = reports.map(r => 
+            r.id === report.id 
+              ? { ...r, downloads: (r.downloads || 0) + 1 }
+              : r
+          );
+          setReports(updatedReports);
+        }
         
         toast.success('Relatório baixado com sucesso!');
         return;
       } catch (err) {
         console.error('Erro ao baixar relatório comparativo:', err);
-        toast.error('Erro ao baixar relatório. Tente novamente.');
+        
+        // Tratamento de erros específicos
+        let errorMessage = 'Erro ao baixar relatório. Tente novamente.';
+        
+        if (err.response) {
+          const status = err.response.status;
+          const message = err.response.data?.message || '';
+          
+          if (status === 400) {
+            errorMessage = message || 'Dados inválidos. O relatório pode estar desatualizado.';
+          } else if (status === 403) {
+            errorMessage = 'Você não tem permissão para baixar este relatório.';
+          } else if (status === 404) {
+            errorMessage = 'Cenários não encontrados. Eles podem ter sido excluídos.';
+          } else if (status === 500) {
+            errorMessage = 'Erro interno do servidor. Tente novamente mais tarde.';
+          } else if (message) {
+            errorMessage = message;
+          }
+        } else if (err.request) {
+          errorMessage = 'Erro de conexão. Verifique sua internet e tente novamente.';
+        }
+        
+        toast.error(errorMessage);
         return;
       }
     }
     
     if (!report.scenarioId) {
-      toast.error('Cenário não encontrado para este relatório');
+      toast.error('Cenário não encontrado para este relatório. O relatório pode estar desatualizado.');
       return;
     }
 
@@ -324,6 +506,12 @@ const Reports = () => {
         report.periodo || 'todos',
         report.template || 'detailed'
       );
+      
+      // Validar resposta
+      if (!response.data || response.data.size === 0) {
+        toast.error('O relatório está vazio. O cenário pode não ter mais lançamentos.');
+        return;
+      }
       
       const blob = new Blob([response.data], {
         type: report.type === 'pdf' 
@@ -345,28 +533,201 @@ const Reports = () => {
           : r
       );
       setReports(updatedReports);
-      localStorage.setItem('reports_history', JSON.stringify(updatedReports));
       
       toast.success('Relatório baixado com sucesso!');
     } catch (err) {
       console.error('Erro ao baixar relatório:', err);
-      toast.error('Erro ao baixar relatório. Tente novamente.');
+      
+      // Tratamento de erros específicos
+      let errorMessage = 'Erro ao baixar relatório. Tente novamente.';
+      
+      if (err.response) {
+        const status = err.response.status;
+        const message = err.response.data?.message || '';
+        
+        if (status === 400) {
+          errorMessage = message || 'Dados inválidos. O relatório pode estar desatualizado.';
+        } else if (status === 403) {
+          errorMessage = 'Você não tem permissão para baixar este relatório.';
+        } else if (status === 404) {
+          errorMessage = 'Cenário não encontrado. Ele pode ter sido excluído.';
+        } else if (status === 500) {
+          errorMessage = 'Erro interno do servidor. Tente novamente mais tarde.';
+        } else if (message) {
+          errorMessage = message;
+        }
+      } else if (err.request) {
+        errorMessage = 'Erro de conexão. Verifique sua internet e tente novamente.';
+      }
+      
+      toast.error(errorMessage);
     }
   };
 
-  const handleView = (report) => {
-    toast.info('Visualização em PDF será implementada em breve');
+  const handleView = async (report) => {
+    // Apenas PDFs podem ser visualizados
+    if (report.type !== 'pdf') {
+      toast.info('A visualização está disponível apenas para relatórios em PDF. Use o botão "Baixar" para arquivos Excel.');
+      return;
+    }
+
+    try {
+      setViewingReport(report.id);
+      
+      let response;
+      if (report.template === 'comparison') {
+        if (!report.scenarioIds || report.scenarioIds.length < 2) {
+          toast.error('IDs de cenários não encontrados para este relatório comparativo.');
+          return;
+        }
+        
+        response = await projectsAPI.downloadComparisonReport(
+          report.scenarioIds,
+          report.type,
+          report.periodo || 'todos'
+        );
+      } else {
+        if (!report.scenarioId) {
+          toast.error('Cenário não encontrado para este relatório.');
+          return;
+        }
+        
+        response = await projectsAPI.downloadReport(
+          report.scenarioId,
+          report.type,
+          report.periodo || 'todos',
+          report.template || 'detailed'
+        );
+      }
+      
+      // Validar resposta
+      if (!response.data || response.data.size === 0) {
+        toast.error('O relatório está vazio. Não é possível visualizar.');
+        return;
+      }
+      
+      // Criar blob e abrir em nova aba
+      const blob = new Blob([response.data], {
+        type: 'application/pdf'
+      });
+      
+      const url = window.URL.createObjectURL(blob);
+      
+      // Abrir PDF em nova aba
+      const newWindow = window.open(url, '_blank');
+      
+      if (!newWindow) {
+        toast.error('Por favor, permita pop-ups para visualizar o PDF.');
+        window.URL.revokeObjectURL(url);
+        return;
+      }
+      
+      // Limpar URL após um tempo (quando a janela carregar)
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 1000);
+      
+      toast.success('PDF aberto em nova aba');
+    } catch (err) {
+      console.error('Erro ao visualizar relatório:', err);
+      
+      // Tratamento de erros específicos
+      let errorMessage = 'Erro ao visualizar relatório. Tente novamente.';
+      
+      if (err.response) {
+        const status = err.response.status;
+        const message = err.response.data?.message || '';
+        
+        if (status === 400) {
+          errorMessage = message || 'Dados inválidos. O relatório pode estar desatualizado.';
+        } else if (status === 403) {
+          errorMessage = 'Você não tem permissão para visualizar este relatório.';
+        } else if (status === 404) {
+          errorMessage = 'Cenário ou projeto não encontrado.';
+        } else if (status === 500) {
+          errorMessage = 'Erro interno do servidor. Tente novamente mais tarde.';
+        } else if (message) {
+          errorMessage = message;
+        }
+      } else if (err.request) {
+        errorMessage = 'Erro de conexão. Verifique sua internet e tente novamente.';
+      }
+      
+      toast.error(errorMessage);
+    } finally {
+      setViewingReport(null);
+    }
   };
 
-  const handleDelete = (reportId) => {
+  const handleShare = async (report) => {
+    try {
+      // Gerar informações do relatório para compartilhar
+      const reportInfo = {
+        titulo: report.title,
+        tipo: report.type,
+        template: report.template,
+        cenario: report.scenario,
+        data: report.date,
+        periodo: report.periodo || 'todos',
+        descricao: report.descricao || ''
+      };
+      
+      // Criar texto formatado para compartilhar
+      const shareText = `Relatório: ${reportInfo.titulo}\n` +
+        `Tipo: ${reportInfo.tipo === 'pdf' ? 'PDF' : 'Excel'}\n` +
+        `Template: ${reportInfo.template === 'executive' ? 'Executivo' : reportInfo.template === 'detailed' ? 'Detalhado' : 'Comparativo'}\n` +
+        `Cenário(s): ${reportInfo.cenario}\n` +
+        `Período: ${reportInfo.periodo}\n` +
+        `Data: ${reportInfo.data}` +
+        (reportInfo.descricao ? `\nDescrição: ${reportInfo.descricao}` : '');
+      
+      // Copiar para área de transferência
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(shareText);
+        toast.success('Informações do relatório copiadas para a área de transferência!');
+      } else {
+        // Fallback para navegadores mais antigos
+        const textArea = document.createElement('textarea');
+        textArea.value = shareText;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          toast.success('Informações do relatório copiadas para a área de transferência!');
+        } catch (err) {
+          toast.error('Não foi possível copiar. Tente selecionar e copiar manualmente.');
+        }
+        document.body.removeChild(textArea);
+      }
+    } catch (err) {
+      console.error('Erro ao compartilhar relatório:', err);
+      toast.error('Erro ao compartilhar relatório. Tente novamente.');
+    }
+  };
+
+  const handleDelete = async (reportId) => {
     if (!window.confirm('Tem certeza que deseja excluir este relatório?')) {
       return;
     }
 
-    const updatedReports = reports.filter(r => r.id !== reportId);
-    setReports(updatedReports);
-    localStorage.setItem('reports_history', JSON.stringify(updatedReports));
-    toast.success('Relatório excluído com sucesso!');
+    try {
+      await projectsAPI.deleteReport(reportId);
+      
+      // Atualizar lista local
+      const updatedReports = reports.filter(r => r.id !== reportId);
+      setReports(updatedReports);
+      
+      toast.success('Relatório excluído com sucesso!');
+    } catch (err) {
+      console.error('Erro ao deletar relatório:', err);
+      toast.error('Erro ao excluir relatório. Tente novamente.');
+      
+      // Fallback: remover localmente mesmo se falhar no backend
+      const updatedReports = reports.filter(r => r.id !== reportId);
+      setReports(updatedReports);
+    }
   };
 
   const filteredReports = reports.filter(report => {
@@ -380,8 +741,20 @@ const Reports = () => {
     if (showExcel && report.type !== 'excel') return false;
     
     // Filtro de cenário
-    if (filterScenario !== 'all' && report.scenarioId !== parseInt(filterScenario)) {
-      return false;
+    if (filterScenario !== 'all') {
+      const selectedScenarioId = parseInt(filterScenario);
+      
+      // Para relatórios comparativos (têm scenarioIds)
+      if (report.scenarioIds && Array.isArray(report.scenarioIds) && report.scenarioIds.length > 0) {
+        // Verificar se o cenário selecionado está na lista de cenários do relatório comparativo
+        if (!report.scenarioIds.includes(selectedScenarioId)) {
+          return false;
+        }
+      } 
+      // Para relatórios normais (têm scenarioId)
+      else if (report.scenarioId !== selectedScenarioId) {
+        return false;
+      }
     }
     
     return true;
@@ -406,7 +779,7 @@ const Reports = () => {
 
       <div className="p-6">
         {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -438,24 +811,6 @@ const Reports = () => {
                 </div>
                 <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
                   <Download className="w-6 h-6 text-blue-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Agendados</p>
-                  {loading ? (
-                    <Skeleton className="h-8 w-16" />
-                  ) : (
-                    <div className="text-3xl font-bold text-gray-900">{stats.agendados}</div>
-                  )}
-                </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                  <Clock className="w-6 h-6 text-orange-600" />
                 </div>
               </div>
             </CardContent>
@@ -868,14 +1223,24 @@ const Reports = () => {
                       variant="outline" 
                       size="sm"
                       onClick={() => handleView(report)}
+                      disabled={viewingReport === report.id || report.type !== 'pdf'}
                     >
-                      <Eye className="w-4 h-4 mr-1" />
-                      Visualizar
+                      {viewingReport === report.id ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                          Carregando...
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-4 h-4 mr-1" />
+                          Visualizar
+                        </>
+                      )}
                     </Button>
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => toast.info('Compartilhamento será implementado em breve')}
+                      onClick={() => handleShare(report)}
                     >
                       <Share className="w-4 h-4 mr-1" />
                       Compartilhar

@@ -36,8 +36,21 @@ git pull origin main || git pull origin master
 if git diff HEAD~1 --name-only | grep -q "frontend/"; then
     echo -e "${YELLOW}🔨 Rebuild do frontend necessário...${NC}"
     cd frontend
+    
+    # Validar VITE_API_URL em produção
+    if [ -z "$VITE_API_URL" ]; then
+        echo -e "${RED}❌ ERRO: VITE_API_URL não configurada para produção!${NC}"
+        echo "   Configure no arquivo .env do projeto raiz:"
+        echo "   VITE_API_URL=https://app.habitusforecast.com.br/api"
+        exit 1
+    fi
+    
+    # Configurar ambiente de produção
+    export BUILD_ENV=production
+    export NODE_ENV=production
+    
     pnpm install --frozen-lockfile
-    pnpm run build
+    bash build.sh
     cd ..
 fi
 

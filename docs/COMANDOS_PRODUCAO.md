@@ -60,7 +60,7 @@ FLASK_ENV=production
 FLASK_DEBUG=False
 PORT=5000
 WORKERS=4
-CORS_ORIGINS=https://seu-dominio.com,https://www.seu-dominio.com
+CORS_ORIGINS=https://app.habitusforecast.com.br
 MAX_CONTENT_LENGTH=16777216
 ```
 

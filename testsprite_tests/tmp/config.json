@@ -3,14 +3,16 @@
   "type": "backend",
   "scope": "codebase",
   "localEndpoint": "http://localhost:5000",
-  "backendAuthType": "public",
+  "loginUser": "admin@habitus.com",
+  "loginPassword": "admin123",
   "executionArgs": {
     "projectName": "habitus-forecast-system",
     "projectPath": "D:\\000 Habitus Forecast\\habitus-forecast-system",
     "testIds": [],
-    "additionalInstruction": "Use default admin credentials: email=admin@habitus.com, password=admin123",
+    "additionalInstruction": "",
     "envs": {
       "API_KEY": "sk-user-j9RoogEddQW5ttk3ps9tzioFI0oXLcUG7yonvaGBAm1p6V-2KXcyzQB4ZwJNejAqSYRmkD97L9l06Age7I5amL6gWVYXFrF69ZlXkEd0Lt8XTe7V5recgWH8bEl7WIibhzU"
     }
-  }
+  },
+  "proxy": "http://5285875e-1d9f-41f0-8828-e2d76653159a:yKXtfGKq3JrV1DZ3kRe83hoclQ24dZG5@tun.testsprite.com:8080"
 }

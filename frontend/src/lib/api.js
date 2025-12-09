@@ -71,7 +71,13 @@ export const projectsAPI = {
   compareScenarios: (cenarioIds) => api.post('/cenarios/comparar', { cenario_ids: cenarioIds }),
   downloadReport: (cenarioId, format, periodo = 'todos', template = 'detailed') => {
     const url = `/cenarios/${cenarioId}/relatorio/${format}?periodo=${periodo}&template=${template}`;
-    return api.get(url, { responseType: 'blob' });
+    return api.get(url, { 
+      responseType: 'blob',
+      // Expor headers customizados
+      headers: {
+        'Accept': format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      }
+    });
   },
   downloadComparisonReport: (cenarioIds, format, periodo = 'todos') => {
     const endpoint = format === 'pdf' 
@@ -80,11 +86,23 @@ export const projectsAPI = {
     return api.post(endpoint, { 
       cenario_ids: cenarioIds,
       periodo: periodo
-    }, { responseType: 'blob' });
+    }, { 
+      responseType: 'blob',
+      // Expor headers customizados
+      headers: {
+        'Accept': format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      }
+    });
   },
   createSnapshot: (cenarioId, descricao = '') => api.post(`/cenarios/${cenarioId}/snapshot`, { descricao }),
   listHistorico: (cenarioId) => api.get(`/cenarios/${cenarioId}/historico`),
   restoreVersion: (cenarioId, historicoId) => api.post(`/cenarios/${cenarioId}/restaurar/${historicoId}`),
+  // Relatórios
+  listReports: () => api.get('/relatorios'),
+  createReport: (data) => api.post('/relatorios', data),
+  getReport: (id) => api.get(`/relatorios/${id}`),
+  updateReport: (id, data) => api.put(`/relatorios/${id}`, data),
+  deleteReport: (id) => api.delete(`/relatorios/${id}`),
 };
 
 // Funções de upload
@@ -96,6 +114,10 @@ export const uploadAPI = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: 300000, // 5 minutos para uploads grandes
+      onUploadProgress: (progressEvent) => {
+        // Progresso será gerenciado pelo componente
+      },
     });
   },
   validateSpreadsheet: (file) => {
@@ -105,6 +127,7 @@ export const uploadAPI = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      timeout: 60000, // 1 minuto para validação
     });
   },
   rename: (id, nome) => api.put(`/uploads/${id}/rename`, { nome }),

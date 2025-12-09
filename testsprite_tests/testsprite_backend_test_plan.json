@@ -2,51 +2,96 @@
   {
     "id": "TC001",
     "title": "post api auth login",
-    "description": "Test user login with valid and invalid credentials and verify JWT token issuance."
+    "description": "Test user login with valid and invalid credentials and verify JWT token issuance.",
+    "endpoint": "POST /api/auth/login",
+    "required_fields": ["email", "password"],
+    "response_structure": {"access_token": "string", "token_type": "bearer", "user": "object"}
   },
   {
     "id": "TC002",
     "title": "post api auth register",
-    "description": "Test user registration with valid data and handle duplicate or invalid inputs."
+    "description": "Test user registration with valid data and handle duplicate or invalid inputs.",
+    "endpoint": "POST /api/auth/register",
+    "required_fields": ["nome", "email", "password"],
+    "response_structure": {"message": "string", "user": {"id": "number", "nome": "string", "email": "string"}},
+    "notes": "IMPORTANT: 'nome' field is MANDATORY. API requires nome, email, and password. Response contains 'user' object, not direct fields."
   },
   {
     "id": "TC003",
     "title": "get api auth me",
-    "description": "Test retrieval of current authenticated user data with valid JWT token."
+    "description": "Test retrieval of current authenticated user data with valid JWT token.",
+    "endpoint": "GET /api/auth/me",
+    "requires_auth": true,
+    "response_structure": {"user": {"id": "number", "email": "string", "nome": "string", "role": "string"}},
+    "notes": "IMPORTANT: Response is wrapped in 'user' key. Extract user object before accessing fields like email."
   },
   {
     "id": "TC004",
     "title": "post api auth logout",
-    "description": "Test user logout functionality and token invalidation."
+    "description": "Test user logout functionality and token invalidation.",
+    "endpoint": "POST /api/auth/logout",
+    "requires_auth": true,
+    "response_structure": {"message": "string"},
+    "notes": "After logout, token should be invalidated and cannot be used for subsequent requests."
   },
   {
     "id": "TC005",
     "title": "get api projetos",
-    "description": "Test listing of projects for authenticated user."
+    "description": "Test listing of projects for authenticated user.",
+    "endpoint": "GET /api/projetos",
+    "requires_auth": true,
+    "response_structure": {"projetos": ["array of project objects"]},
+    "notes": "IMPORTANT: Response contains 'projetos' key (not 'projects'). Extract projetos array from response."
   },
   {
     "id": "TC006",
     "title": "post api projetos",
-    "description": "Test creation of new project with valid data for authenticated user."
+    "description": "Test creation of new project with valid data for authenticated user.",
+    "endpoint": "POST /api/projetos",
+    "requires_auth": true,
+    "required_fields": ["nome_cliente", "data_base_estudo"],
+    "optional_fields": ["saldo_inicial_caixa"],
+    "response_structure": {"message": "string", "projeto": {"id": "number", "nome_cliente": "string", "data_base_estudo": "string"}},
+    "notes": "IMPORTANT: Use 'nome_cliente' and 'data_base_estudo' (NOT 'nome', 'descricao', or 'data_base'). Response contains 'projeto' object, extract id from projeto.id"
   },
   {
     "id": "TC007",
     "title": "post api upload planilha",
-    "description": "Test upload and processing of valid Excel spreadsheet with authentication."
+    "description": "Test upload and processing of valid Excel spreadsheet with authentication.",
+    "endpoint": "POST /api/upload-planilha",
+    "requires_auth": true,
+    "content_type": "multipart/form-data",
+    "required_fields": ["file"],
+    "file_requirements": "Valid Excel file (.xlsx or .xls) with Habitus Forecast/FDC-REAL structure",
+    "notes": "Requires a valid Excel file. Minimal Excel files may not work - file must be properly formatted Excel."
   },
   {
     "id": "TC008",
     "title": "get api dashboard stats",
-    "description": "Test retrieval of general financial statistics on dashboard with authentication."
+    "description": "Test retrieval of general financial statistics on dashboard with authentication.",
+    "endpoint": "GET /api/dashboard/stats",
+    "requires_auth": true,
+    "response_structure": {"stats": "object"}
   },
   {
     "id": "TC009",
     "title": "post api cenarios projetos projetoid cenarios",
-    "description": "Test creation of financial scenario for a given project with valid data and authentication."
+    "description": "Test creation of financial scenario for a given project with valid data and authentication.",
+    "endpoint": "POST /api/projetos/{projeto_id}/cenarios",
+    "requires_auth": true,
+    "required_fields": ["nome"],
+    "optional_fields": ["descricao", "is_active"],
+    "response_structure": {"message": "string", "cenario": {"id": "number", "nome": "string", "descricao": "string", "is_active": "boolean"}},
+    "notes": "IMPORTANT: URL is /api/projetos/{id}/cenarios (NOT /api/cenarios/projetos/{id}/cenarios). Project must be created first with 'nome_cliente' and 'data_base_estudo'. Scenario uses 'nome', 'descricao', 'is_active' (NOT 'tipo' or 'percentual'). Response contains 'cenario' object."
   },
   {
     "id": "TC010",
     "title": "get api admin usuarios",
-    "description": "Test listing of users by admin with proper authentication and admin role verification."
+    "description": "Test listing of users by admin with proper authentication and admin role verification.",
+    "endpoint": "GET /api/admin/usuarios",
+    "requires_auth": true,
+    "requires_admin": true,
+    "response_structure": {"usuarios": ["array of user objects"], "pagination": {"page": "number", "per_page": "number", "total": "number"}},
+    "notes": "IMPORTANT: Response contains 'usuarios' key (NOT 'users'). Extract usuarios array from response object. Response is paginated."
   }
 ]

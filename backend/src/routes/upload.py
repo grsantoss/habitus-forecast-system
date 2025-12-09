@@ -1,10 +1,11 @@
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, current_app
 import os
 import tempfile
 from werkzeug.utils import secure_filename
 from src.models.user import db, LogSistema, Projeto, ArquivoUpload
 from src.auth import token_required
 from src.services.planilha_processor import ProcessadorPlanilhaHabitusForecast
+from src.utils.logger import debug_log, error_log, exception_log
 
 upload_bp = Blueprint('upload', __name__)
 
@@ -97,6 +98,11 @@ def upload_planilha(current_user):
         if not allowed_file(file.filename):
             return jsonify({'message': 'Apenas arquivos Excel (.xlsx, .xls) são aceitos'}), 400
         
+        # Validar tamanho do arquivo ANTES de salvar
+        is_valid_size, size_error = validate_file_size(file)
+        if not is_valid_size:
+            return jsonify({'message': size_error}), 400
+        
         # Salvar arquivo temporariamente com nome único
         filename = secure_filename(file.filename)
         import uuid
@@ -165,20 +171,56 @@ def upload_planilha(current_user):
                 'upload_data': upload_data
             }), 201
             
-        except Exception as e:
-            # Log de erro
+        except ValueError as e:
+            # Erro de validação de dados
+            error_msg = str(e)
             log = LogSistema(
                 usuario_id=current_user.id,
                 acao='PLANILHA_UPLOAD_ERROR',
                 detalhes={
                     'filename': filename,
-                    'erro': str(e)
+                    'erro': error_msg,
+                    'tipo': 'VALIDACAO'
                 }
             )
             db.session.add(log)
             db.session.commit()
             
-            return jsonify({'message': f'Erro ao processar planilha: {str(e)}'}), 400
+            return jsonify({'message': f'Erro na validação da planilha: {error_msg}'}), 400
+        
+        except FileNotFoundError as e:
+            # Arquivo não encontrado ou corrompido
+            log = LogSistema(
+                usuario_id=current_user.id,
+                acao='PLANILHA_UPLOAD_ERROR',
+                detalhes={
+                    'filename': filename,
+                    'erro': 'Arquivo não encontrado ou corrompido',
+                    'tipo': 'ARQUIVO'
+                }
+            )
+            db.session.add(log)
+            db.session.commit()
+            
+            return jsonify({'message': 'O arquivo parece estar corrompido ou em formato inválido. Verifique se é um arquivo Excel válido.'}), 400
+        
+        except Exception as e:
+            # Erro genérico - não expor detalhes internos
+            error_details = str(e)
+            log = LogSistema(
+                usuario_id=current_user.id,
+                acao='PLANILHA_UPLOAD_ERROR',
+                detalhes={
+                    'filename': filename,
+                    'erro': error_details,
+                    'tipo': 'GENERICO'
+                }
+            )
+            db.session.add(log)
+            db.session.commit()
+            
+            # Mensagem genérica para o usuário
+            return jsonify({'message': 'Erro ao processar planilha. Verifique se o arquivo está no formato correto e tente novamente.'}), 400
         
         finally:
             # Limpar arquivo temporário
@@ -186,8 +228,23 @@ def upload_planilha(current_user):
                 os.unlink(temp_path)
     
     except Exception as e:
-        print(f"Erro no endpoint: {str(e)}")
-        return jsonify({'message': f'Erro interno: {str(e)}'}), 500
+        # Log de erro interno (não expor ao usuário)
+        exception_log(f"Erro interno no endpoint de upload: {str(e)}")
+        try:
+            log = LogSistema(
+                usuario_id=current_user.id if current_user else None,
+                acao='PLANILHA_UPLOAD_ERROR_INTERNO',
+                detalhes={
+                    'erro': str(e),
+                    'tipo': 'INTERNO'
+                }
+            )
+            db.session.add(log)
+            db.session.commit()
+        except:
+            pass
+        
+        return jsonify({'message': 'Erro interno do servidor. Tente novamente mais tarde.'}), 500
 
 @upload_bp.route('/validar-planilha', methods=['POST'])
 @token_required
@@ -205,6 +262,11 @@ def validar_planilha(current_user):
         
         if not allowed_file(file.filename):
             return jsonify({'message': 'Apenas arquivos Excel (.xlsx, .xls) são aceitos'}), 400
+        
+        # Validar tamanho do arquivo ANTES de salvar
+        is_valid_size, size_error = validate_file_size(file)
+        if not is_valid_size:
+            return jsonify({'message': size_error}), 400
         
         # Salvar arquivo temporariamente com nome único
         filename = secure_filename(file.filename)
@@ -225,7 +287,7 @@ def validar_planilha(current_user):
                     parametros = processador.extrair_parametros_gerais(temp_path)
                     validacao['preview_parametros'] = parametros
                 except Exception as e:
-                    print(f"Erro ao extrair parâmetros: {str(e)}")
+                    debug_log(f"Erro ao extrair parâmetros: {str(e)}")
                     pass
             
             return jsonify({
@@ -239,23 +301,23 @@ def validar_planilha(current_user):
                 os.unlink(temp_path)
     
     except Exception as e:
-        print(f"Erro no endpoint: {str(e)}")
-        return jsonify({'message': f'Erro interno: {str(e)}'}), 500
+        exception_log(f"Erro no endpoint de validação: {str(e)}")
+        return jsonify({'message': 'Erro interno ao validar planilha'}), 500
 
 @upload_bp.route('/uploads/history', methods=['GET'])
 @token_required
 def get_upload_history(current_user):
     """Endpoint para obter histórico de uploads do usuário"""
     try:
-        print(f"Buscando histórico para usuário ID: {current_user.id}")
+        debug_log(f"Buscando histórico para usuário ID: {current_user.id}")
         
         # Buscar projetos do usuário
         projetos = Projeto.query.filter_by(usuario_id=current_user.id).all()
         projeto_ids = [p.id for p in projetos]
-        print(f"Projetos encontrados: {len(projetos)}, IDs: {projeto_ids}")
+        debug_log(f"Projetos encontrados: {len(projetos)}, IDs: {projeto_ids}")
         
         if not projeto_ids:
-            print("Nenhum projeto encontrado para o usuário")
+            debug_log("Nenhum projeto encontrado para o usuário")
             return jsonify([]), 200
         
         # Buscar uploads dos projetos do usuário
@@ -263,9 +325,7 @@ def get_upload_history(current_user):
             ArquivoUpload.projeto_id.in_(projeto_ids)
         ).order_by(ArquivoUpload.uploaded_at.desc()).all()
         
-        print(f"Uploads encontrados: {len(uploads)}")
-        for upload in uploads:
-            print(f"  - ID: {upload.id}, Nome: {upload.nome_original}, Projeto: {upload.projeto_id}")
+        debug_log(f"Uploads encontrados: {len(uploads)}")
         
         history_data = []
         for upload in uploads:
@@ -281,45 +341,43 @@ def get_upload_history(current_user):
                 'lancamentos': lancamentos_count
             }
             
-            print(f"Item do histórico: {item_data}")
             history_data.append(item_data)
         
-        print(f"Retornando {len(history_data)} itens do histórico")
+        debug_log(f"Retornando {len(history_data)} itens do histórico")
         return jsonify(history_data), 200
         
     except Exception as e:
-        print(f"Erro ao buscar histórico: {str(e)}")
-        return jsonify({'message': f'Erro ao buscar histórico: {str(e)}'}), 500
+        exception_log(f"Erro ao buscar histórico: {str(e)}")
+        return jsonify({'message': 'Erro ao buscar histórico'}), 500
 
 @upload_bp.route('/uploads/<int:upload_id>/download', methods=['GET'])
 @token_required
 def download_upload_file(current_user, upload_id):
     """Endpoint para download de arquivo processado"""
     try:
-        print(f"Tentando download do upload ID: {upload_id} para usuário: {current_user.id}")
+        debug_log(f"Tentando download do upload ID: {upload_id} para usuário: {current_user.id}")
         
         upload_record = ArquivoUpload.query.get(upload_id)
         if not upload_record:
-            print(f"Upload ID {upload_id} não encontrado")
+            debug_log(f"Upload ID {upload_id} não encontrado")
             return jsonify({'message': 'Upload não encontrado'}), 404
         
-        print(f"Upload encontrado: {upload_record.nome_original}")
+        debug_log(f"Upload encontrado: {upload_record.nome_original}")
         
         # Verificar se o usuário tem acesso ao arquivo
         projeto = Projeto.query.get(upload_record.projeto_id)
         if not projeto or projeto.usuario_id != current_user.id:
-            print(f"Acesso negado: projeto.usuario_id={projeto.usuario_id if projeto else 'None'}, current_user.id={current_user.id}")
+            debug_log(f"Acesso negado: projeto.usuario_id={projeto.usuario_id if projeto else 'None'}, current_user.id={current_user.id}")
             return jsonify({'message': 'Acesso negado'}), 403
         
         file_path = upload_record.caminho_storage
-        print(f"Caminho do arquivo: {file_path}")
-        print(f"Arquivo existe: {os.path.exists(file_path)}")
+        debug_log(f"Caminho do arquivo: {file_path}")
         
         if not os.path.exists(file_path):
-            print(f"Arquivo não encontrado no caminho: {file_path}")
+            error_log(f"Arquivo não encontrado no caminho: {file_path}")
             return jsonify({'message': 'Arquivo não encontrado no servidor'}), 404
         
-        print(f"Iniciando download do arquivo: {upload_record.nome_original}")
+        debug_log(f"Iniciando download do arquivo: {upload_record.nome_original}")
         return send_file(
             file_path, 
             as_attachment=True, 
@@ -327,8 +385,8 @@ def download_upload_file(current_user, upload_id):
         )
         
     except Exception as e:
-        print(f"Erro no download: {str(e)}")
-        return jsonify({'message': f'Erro no download: {str(e)}'}), 500
+        exception_log(f"Erro no download: {str(e)}")
+        return jsonify({'message': 'Erro no download'}), 500
 
 @upload_bp.route('/uploads/<int:upload_id>', methods=['DELETE'])
 @token_required
@@ -379,14 +437,14 @@ def delete_upload_file(current_user, upload_id):
         db.session.delete(upload_record)
         db.session.commit()
         
-        print(f"Upload {upload_id} deletado com sucesso - {lancamentos_deletados} lançamentos e {cenarios_deletados} cenários removidos")
+        debug_log(f"Upload {upload_id} deletado com sucesso - {lancamentos_deletados} lançamentos e {cenarios_deletados} cenários removidos")
         
         return jsonify({'message': 'Upload deletado com sucesso'}), 200
         
     except Exception as e:
         db.session.rollback()
-        print(f"Erro ao deletar upload: {str(e)}")
-        return jsonify({'message': f'Erro ao deletar upload: {str(e)}'}), 500
+        exception_log(f"Erro ao deletar upload: {str(e)}")
+        return jsonify({'message': 'Erro ao deletar upload'}), 500
 
 
 @upload_bp.route('/uploads/<int:upload_id>/rename', methods=['PUT'])

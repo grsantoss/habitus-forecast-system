@@ -16,8 +16,23 @@ fi
 # Build do frontend
 echo "📦 Building frontend..."
 cd frontend
-pnpm install
-pnpm run build
+
+# Configurar ambiente de produção para validação
+export BUILD_ENV=production
+export NODE_ENV=production
+
+# Verificar se VITE_API_URL está configurada (build.sh vai validar)
+if [ -z "$VITE_API_URL" ]; then
+    echo "❌ ERRO: VITE_API_URL não configurada para produção!" >&2
+    echo "" >&2
+    echo "   Configure no arquivo .env do projeto raiz:" >&2
+    echo "   VITE_API_URL=https://app.habitusforecast.com.br/api" >&2
+    echo "" >&2
+    exit 1
+fi
+
+# Executar build (que vai validar VITE_API_URL)
+bash build.sh
 cd ..
 
 # Build das imagens Docker

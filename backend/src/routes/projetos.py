@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, send_file
 from datetime import datetime, timedelta
 from sqlalchemy import func, extract
-from src.models.user import db, Projeto, Cenario, LogSistema, ArquivoUpload, LancamentoFinanceiro, CategoriaFinanceira, HistoricoCenario, User
+from src.models.user import db, Projeto, Cenario, LogSistema, ArquivoUpload, LancamentoFinanceiro, CategoriaFinanceira, HistoricoCenario, User, Relatorio
 from src.auth import token_required, admin_required
 from io import BytesIO
 import os
@@ -225,6 +225,150 @@ def listar_cenarios(current_user):
             cenarios_data.append(cenario_dict)
         
         return jsonify({'cenarios': cenarios_data}), 200
+        
+    except Exception as e:
+        return jsonify({'message': f'Erro interno: {str(e)}'}), 500
+
+@projetos_bp.route('/cenarios/comparar', methods=['POST'])
+@token_required
+def comparar_cenarios(current_user):
+    """Compara múltiplos cenários e retorna estatísticas comparativas"""
+    try:
+        data = request.get_json()
+        
+        if not data or not data.get('cenario_ids'):
+            return jsonify({'message': 'Lista de IDs de cenários é obrigatória'}), 400
+        
+        cenario_ids = data.get('cenario_ids')
+        
+        if not isinstance(cenario_ids, list) or len(cenario_ids) < 2:
+            return jsonify({'message': 'É necessário pelo menos 2 cenários para comparar'}), 400
+        
+        if len(cenario_ids) > 5:
+            return jsonify({'message': 'Máximo de 5 cenários por comparação'}), 400
+        
+        # Buscar cenários e verificar permissões
+        cenarios = []
+        for cenario_id in cenario_ids:
+            cenario = Cenario.query.get(cenario_id)
+            if not cenario:
+                return jsonify({'message': f'Cenário {cenario_id} não encontrado'}), 404
+            
+            projeto = Projeto.query.get(cenario.projeto_id)
+            if not projeto:
+                return jsonify({'message': f'Projeto do cenário {cenario_id} não encontrado'}), 404
+            
+            # Verificar permissão
+            if current_user.role != 'admin' and projeto.usuario_id != current_user.id:
+                return jsonify({'message': f'Acesso negado ao cenário {cenario_id}'}), 403
+            
+            cenarios.append({
+                'cenario': cenario,
+                'projeto': projeto
+            })
+        
+        # Buscar análises de cada cenário
+        comparacao = []
+        for item in cenarios:
+            cenario = item['cenario']
+            projeto = item['projeto']
+            
+            # Buscar lançamentos
+            lancamentos = LancamentoFinanceiro.query.filter_by(cenario_id=cenario.id).all()
+            
+            # Calcular estatísticas
+            total_entradas = sum(float(l.valor) for l in lancamentos if l.tipo == 'ENTRADA')
+            total_saidas = sum(float(l.valor) for l in lancamentos if l.tipo == 'SAIDA')
+            saldo_liquido = total_entradas - total_saidas
+            total_lancamentos = len(lancamentos)
+            
+            # Buscar arquivo relacionado
+            upload_recente = ArquivoUpload.query.filter_by(projeto_id=projeto.id)\
+                .order_by(ArquivoUpload.uploaded_at.desc()).first()
+            
+            # Agrupar por período (mensal) para gráficos
+            dados_agrupados = {}
+            for lancamento in lancamentos:
+                data = lancamento.data_competencia
+                chave = f"{data.year}-{data.month:02d}"
+                meses_pt = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+                periodo_label = f"{meses_pt[data.month - 1]}/{data.year}"
+                
+                if chave not in dados_agrupados:
+                    dados_agrupados[chave] = {
+                        'periodo': periodo_label,
+                        'entradas': 0,
+                        'saidas': 0,
+                        'saldo_liquido': 0
+                    }
+                
+                valor = float(lancamento.valor)
+                if lancamento.tipo == 'ENTRADA':
+                    dados_agrupados[chave]['entradas'] += valor
+                else:
+                    dados_agrupados[chave]['saidas'] += valor
+                
+                dados_agrupados[chave]['saldo_liquido'] = dados_agrupados[chave]['entradas'] - dados_agrupados[chave]['saidas']
+            
+            fluxo_caixa = [
+                {
+                    'periodo': dados['periodo'],
+                    'entradas': dados['entradas'],
+                    'saidas': dados['saidas'],
+                    'saldo_liquido': dados['saldo_liquido']
+                }
+                for chave, dados in sorted(dados_agrupados.items())
+            ]
+            
+            comparacao.append({
+                'cenario_id': cenario.id,
+                'cenario_nome': cenario.nome,
+                'projeto_nome': projeto.nome_cliente,
+                'is_active': cenario.is_active,
+                'estatisticas': {
+                    'total_entradas': total_entradas,
+                    'total_saidas': total_saidas,
+                    'saldo_liquido': saldo_liquido,
+                    'total_lancamentos': total_lancamentos
+                },
+                'fluxo_caixa': fluxo_caixa,
+                'arquivo_nome': upload_recente.nome_original if upload_recente else None
+            })
+        
+        # Calcular diferenças percentuais (usando o primeiro cenário como base)
+        if len(comparacao) >= 2:
+            base = comparacao[0]
+            base_saldo = base['estatisticas']['saldo_liquido']
+            base_entradas = base['estatisticas']['total_entradas']
+            base_saidas = base['estatisticas']['total_saidas']
+            
+            for item in comparacao[1:]:
+                item['diferencas_percentuais'] = {
+                    'saldo_liquido': (
+                        ((item['estatisticas']['saldo_liquido'] - base_saldo) / base_saldo * 100)
+                        if base_saldo != 0 else 0
+                    ),
+                    'entradas': (
+                        ((item['estatisticas']['total_entradas'] - base_entradas) / base_entradas * 100)
+                        if base_entradas != 0 else 0
+                    ),
+                    'saidas': (
+                        ((item['estatisticas']['total_saidas'] - base_saidas) / base_saidas * 100)
+                        if base_saidas != 0 else 0
+                    )
+                }
+            
+            # Adicionar diferença zero para o primeiro (base)
+            comparacao[0]['diferencas_percentuais'] = {
+                'saldo_liquido': 0,
+                'entradas': 0,
+                'saidas': 0
+            }
+        
+        return jsonify({
+            'comparacao': comparacao,
+            'total_cenarios': len(comparacao)
+        }), 200
         
     except Exception as e:
         return jsonify({'message': f'Erro interno: {str(e)}'}), 500
@@ -898,151 +1042,6 @@ def obter_graficos_cenario(current_user, cenario_id):
     except Exception as e:
         return jsonify({'message': f'Erro interno: {str(e)}'}), 500
 
-@projetos_bp.route('/cenarios/comparar', methods=['POST'])
-@token_required
-def comparar_cenarios(current_user):
-    """Compara múltiplos cenários e retorna estatísticas comparativas"""
-    try:
-        data = request.get_json()
-        
-        if not data or not data.get('cenario_ids'):
-            return jsonify({'message': 'Lista de IDs de cenários é obrigatória'}), 400
-        
-        cenario_ids = data.get('cenario_ids')
-        
-        if not isinstance(cenario_ids, list) or len(cenario_ids) < 2:
-            return jsonify({'message': 'É necessário pelo menos 2 cenários para comparar'}), 400
-        
-        if len(cenario_ids) > 5:
-            return jsonify({'message': 'Máximo de 5 cenários por comparação'}), 400
-        
-        # Buscar cenários e verificar permissões
-        cenarios = []
-        for cenario_id in cenario_ids:
-            cenario = Cenario.query.get(cenario_id)
-            if not cenario:
-                return jsonify({'message': f'Cenário {cenario_id} não encontrado'}), 404
-            
-            projeto = Projeto.query.get(cenario.projeto_id)
-            if not projeto:
-                return jsonify({'message': f'Projeto do cenário {cenario_id} não encontrado'}), 404
-            
-            # Verificar permissão
-            if current_user.role != 'admin' and projeto.usuario_id != current_user.id:
-                return jsonify({'message': f'Acesso negado ao cenário {cenario_id}'}), 403
-            
-            cenarios.append({
-                'cenario': cenario,
-                'projeto': projeto
-            })
-        
-        # Buscar análises de cada cenário
-        comparacao = []
-        for item in cenarios:
-            cenario = item['cenario']
-            projeto = item['projeto']
-            
-            # Buscar lançamentos
-            lancamentos = LancamentoFinanceiro.query.filter_by(cenario_id=cenario.id).all()
-            
-            # Calcular estatísticas
-            total_entradas = sum(float(l.valor) for l in lancamentos if l.tipo == 'ENTRADA')
-            total_saidas = sum(float(l.valor) for l in lancamentos if l.tipo == 'SAIDA')
-            saldo_liquido = total_entradas - total_saidas
-            total_lancamentos = len(lancamentos)
-            
-            # Buscar arquivo relacionado
-            upload_recente = ArquivoUpload.query.filter_by(projeto_id=projeto.id)\
-                .order_by(ArquivoUpload.uploaded_at.desc()).first()
-            
-            # Agrupar por período (mensal) para gráficos
-            dados_agrupados = {}
-            for lancamento in lancamentos:
-                data = lancamento.data_competencia
-                chave = f"{data.year}-{data.month:02d}"
-                meses_pt = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-                periodo_label = f"{meses_pt[data.month - 1]}/{data.year}"
-                
-                if chave not in dados_agrupados:
-                    dados_agrupados[chave] = {
-                        'periodo': periodo_label,
-                        'entradas': 0,
-                        'saidas': 0,
-                        'saldo_liquido': 0
-                    }
-                
-                valor = float(lancamento.valor)
-                if lancamento.tipo == 'ENTRADA':
-                    dados_agrupados[chave]['entradas'] += valor
-                else:
-                    dados_agrupados[chave]['saidas'] += valor
-                
-                dados_agrupados[chave]['saldo_liquido'] = dados_agrupados[chave]['entradas'] - dados_agrupados[chave]['saidas']
-            
-            fluxo_caixa = [
-                {
-                    'periodo': dados['periodo'],
-                    'entradas': dados['entradas'],
-                    'saidas': dados['saidas'],
-                    'saldo_liquido': dados['saldo_liquido']
-                }
-                for chave, dados in sorted(dados_agrupados.items())
-            ]
-            
-            comparacao.append({
-                'cenario_id': cenario.id,
-                'cenario_nome': cenario.nome,
-                'projeto_nome': projeto.nome_cliente,
-                'is_active': cenario.is_active,
-                'estatisticas': {
-                    'total_entradas': total_entradas,
-                    'total_saidas': total_saidas,
-                    'saldo_liquido': saldo_liquido,
-                    'total_lancamentos': total_lancamentos
-                },
-                'fluxo_caixa': fluxo_caixa,
-                'arquivo_nome': upload_recente.nome_original if upload_recente else None
-            })
-        
-        # Calcular diferenças percentuais (usando o primeiro cenário como base)
-        if len(comparacao) >= 2:
-            base = comparacao[0]
-            base_saldo = base['estatisticas']['saldo_liquido']
-            base_entradas = base['estatisticas']['total_entradas']
-            base_saidas = base['estatisticas']['total_saidas']
-            
-            for item in comparacao[1:]:
-                item['diferencas_percentuais'] = {
-                    'saldo_liquido': (
-                        ((item['estatisticas']['saldo_liquido'] - base_saldo) / base_saldo * 100)
-                        if base_saldo != 0 else 0
-                    ),
-                    'entradas': (
-                        ((item['estatisticas']['total_entradas'] - base_entradas) / base_entradas * 100)
-                        if base_entradas != 0 else 0
-                    ),
-                    'saidas': (
-                        ((item['estatisticas']['total_saidas'] - base_saidas) / base_saidas * 100)
-                        if base_saidas != 0 else 0
-                    )
-                }
-            
-            # Adicionar diferença zero para o primeiro (base)
-            comparacao[0]['diferencas_percentuais'] = {
-                'saldo_liquido': 0,
-                'entradas': 0,
-                'saidas': 0
-            }
-        
-        return jsonify({
-            'comparacao': comparacao,
-            'total_cenarios': len(comparacao)
-        }), 200
-        
-    except Exception as e:
-        return jsonify({'message': f'Erro interno: {str(e)}'}), 500
-
-
 # ============================================================================
 # FUNÇÕES AUXILIARES PARA GERAÇÃO DE RELATÓRIOS
 # ============================================================================
@@ -1157,7 +1156,7 @@ def _gerar_pdf_executive(cenario, projeto, lancamentos, periodo, upload_recente,
         ['Saldo Líquido', f"R$ {saldo_liquido:,.2f}"]
     ]
     
-    summary_table = Table(summary_data, colWidths=[3*inch, 3*inch])
+    summary_table = Table(summary_data, colWidths=[4*inch, 4*inch])
     summary_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -1181,7 +1180,7 @@ def _gerar_pdf_executive(cenario, projeto, lancamentos, periodo, upload_recente,
     if upload_recente:
         info_data.append(['Arquivo Origem:', upload_recente.nome_original])
     
-    info_table = Table(info_data, colWidths=[2*inch, 4*inch])
+    info_table = Table(info_data, colWidths=[2.5*inch, 6*inch])
     info_table.setStyle(TableStyle([
         ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 10),
@@ -1238,7 +1237,7 @@ def _gerar_pdf_detailed(cenario, projeto, lancamentos, periodo, upload_recente, 
         ['Status:', 'Ativo' if cenario.is_active else 'Congelado'],
         ['Arquivo Origem:', upload_recente.nome_original if upload_recente else 'N/A']
     ]
-    info_table = Table(info_data, colWidths=[2*inch, 4*inch])
+    info_table = Table(info_data, colWidths=[2.5*inch, 6*inch])
     info_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f3f4f6')),
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#1f2937')),
@@ -1260,7 +1259,7 @@ def _gerar_pdf_detailed(cenario, projeto, lancamentos, periodo, upload_recente, 
         ['Saldo Líquido', f"R$ {saldo_liquido:,.2f}"],
         ['Total de Lançamentos', str(total_lancamentos)]
     ]
-    stats_table = Table(stats_data, colWidths=[3*inch, 3*inch])
+    stats_table = Table(stats_data, colWidths=[4*inch, 4*inch])
     stats_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f3f4f6')),
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.HexColor('#1f2937')),
@@ -1286,7 +1285,7 @@ def _gerar_pdf_detailed(cenario, projeto, lancamentos, periodo, upload_recente, 
                 f"R$ {cat['saidas']:,.2f}",
                 f"R$ {cat['total']:,.2f}"
             ])
-        cat_table = Table(cat_data, colWidths=[2*inch, 1.5*inch, 1.5*inch, 1.5*inch])
+        cat_table = Table(cat_data, colWidths=[3*inch, 2*inch, 2*inch, 2*inch])
         cat_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -1316,7 +1315,7 @@ def _gerar_pdf_detailed(cenario, projeto, lancamentos, periodo, upload_recente, 
                     f"R$ {dados['saldo_liquido']:,.2f}"
                 ])
             
-            periodo_table = Table(periodo_data, colWidths=[1.5*inch, 1.5*inch, 1.5*inch, 1.5*inch])
+            periodo_table = Table(periodo_data, colWidths=[2*inch, 2*inch, 2*inch, 2*inch])
             periodo_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -1388,7 +1387,7 @@ def _gerar_pdf_comparison(cenarios_data, periodo, styles, colors):
             str(len(lancamentos))
         ])
     
-    comp_table = Table(comp_data, colWidths=[1.5*inch, 2*inch, 1.2*inch, 1.2*inch, 1.2*inch, 1*inch])
+    comp_table = Table(comp_data, colWidths=[2*inch, 2.5*inch, 1.5*inch, 1.5*inch, 1.5*inch, 1.2*inch])
     comp_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -1427,7 +1426,7 @@ def _gerar_pdf_comparison(cenarios_data, periodo, styles, colors):
                     cat['nome'],
                     f"R$ {cat['total']:,.2f}"
                 ])
-            cat_table = Table(cat_data, colWidths=[3*inch, 2*inch])
+            cat_table = Table(cat_data, colWidths=[4*inch, 3*inch])
             cat_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#6b7280')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -1448,7 +1447,7 @@ def _gerar_pdf_comparison(cenarios_data, periodo, styles, colors):
 def gerar_relatorio_pdf(current_user, cenario_id):
     """Gera relatório PDF de um cenário"""
     try:
-        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.lib.pagesizes import letter, A4, landscape
         from reportlab.lib.units import inch
         from reportlab.lib import colors
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
@@ -1469,8 +1468,34 @@ def gerar_relatorio_pdf(current_user, cenario_id):
         periodo = request.args.get('periodo', 'todos')  # todos, mensal, trimestral, anual
         template = request.args.get('template', 'detailed')  # executive, detailed, comparison
         
-        # Buscar análise do cenário
-        lancamentos = LancamentoFinanceiro.query.filter_by(cenario_id=cenario_id).all()
+        # Buscar lançamentos do cenário
+        lancamentos_query = LancamentoFinanceiro.query.filter_by(cenario_id=cenario_id)
+        
+        # Aplicar filtro de período se não for 'todos'
+        if periodo != 'todos':
+            hoje = datetime.now().date()
+            if periodo == 'mensal':
+                # Último mês
+                primeiro_dia_mes = hoje.replace(day=1)
+                lancamentos_query = lancamentos_query.filter(
+                    LancamentoFinanceiro.data_competencia >= primeiro_dia_mes
+                )
+            elif periodo == 'trimestral':
+                # Último trimestre
+                trimestre_atual = (hoje.month - 1) // 3
+                primeiro_mes_trimestre = trimestre_atual * 3 + 1
+                primeiro_dia_trimestre = hoje.replace(month=primeiro_mes_trimestre, day=1)
+                lancamentos_query = lancamentos_query.filter(
+                    LancamentoFinanceiro.data_competencia >= primeiro_dia_trimestre
+                )
+            elif periodo == 'anual':
+                # Último ano
+                primeiro_dia_ano = hoje.replace(month=1, day=1)
+                lancamentos_query = lancamentos_query.filter(
+                    LancamentoFinanceiro.data_competencia >= primeiro_dia_ano
+                )
+        
+        lancamentos = lancamentos_query.all()
         
         # Verificar se há lançamentos
         if not lancamentos:
@@ -1486,9 +1511,9 @@ def gerar_relatorio_pdf(current_user, cenario_id):
         upload_recente = ArquivoUpload.query.filter_by(projeto_id=projeto.id)\
             .order_by(ArquivoUpload.uploaded_at.desc()).first()
         
-        # Criar PDF em memória
+        # Criar PDF em memória (paisagem)
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), topMargin=0.5*inch, bottomMargin=0.5*inch)
         story = []
         styles = getSampleStyleSheet()
         
@@ -1517,15 +1542,39 @@ def gerar_relatorio_pdf(current_user, cenario_id):
         doc.build(story)
         buffer.seek(0)
         
+        # Contar páginas do PDF usando PyPDF2
+        num_pages = 1  # Default
+        try:
+            import PyPDF2
+            pdf_reader = PyPDF2.PdfReader(buffer)
+            num_pages = len(pdf_reader.pages)
+            buffer.seek(0)  # Resetar buffer após leitura
+        except ImportError:
+            # Se PyPDF2 não estiver instalado, estimar baseado no tamanho do conteúdo
+            # Estimativa: ~50 linhas por página
+            total_elements = len(story)
+            num_pages = max(1, (total_elements // 50) + 1)
+        except Exception:
+            # Em caso de erro, usar estimativa
+            total_elements = len(story)
+            num_pages = max(1, (total_elements // 50) + 1)
+        
         # Preparar nome do arquivo
         nome_arquivo = f"relatorio_{template}_{cenario.nome.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         
-        return send_file(
+        response = send_file(
             buffer,
             mimetype='application/pdf',
             as_attachment=True,
             download_name=nome_arquivo
         )
+        
+        # Adicionar metadados nos headers
+        response.headers['X-Report-Pages'] = str(num_pages)
+        response.headers['X-Report-Template'] = template
+        response.headers['X-Report-Period'] = periodo
+        
+        return response
         
     except Exception as e:
         return jsonify({'message': f'Erro ao gerar PDF: {str(e)}'}), 500
@@ -1536,7 +1585,7 @@ def gerar_relatorio_pdf(current_user, cenario_id):
 def gerar_relatorio_comparativo_pdf(current_user):
     """Gera relatório PDF comparativo de múltiplos cenários"""
     try:
-        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.lib.pagesizes import letter, A4, landscape
         from reportlab.lib.units import inch
         from reportlab.lib import colors
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
@@ -1569,7 +1618,30 @@ def gerar_relatorio_comparativo_pdf(current_user):
             if current_user.role != 'admin' and projeto.usuario_id != current_user.id:
                 return jsonify({'message': f'Acesso negado ao cenário {cenario_id}'}), 403
             
-            lancamentos = LancamentoFinanceiro.query.filter_by(cenario_id=cenario.id).all()
+            # Aplicar filtro de período
+            lancamentos_query = LancamentoFinanceiro.query.filter_by(cenario_id=cenario.id)
+            
+            if periodo != 'todos':
+                hoje = datetime.now().date()
+                if periodo == 'mensal':
+                    primeiro_dia_mes = hoje.replace(day=1)
+                    lancamentos_query = lancamentos_query.filter(
+                        LancamentoFinanceiro.data_competencia >= primeiro_dia_mes
+                    )
+                elif periodo == 'trimestral':
+                    trimestre_atual = (hoje.month - 1) // 3
+                    primeiro_mes_trimestre = trimestre_atual * 3 + 1
+                    primeiro_dia_trimestre = hoje.replace(month=primeiro_mes_trimestre, day=1)
+                    lancamentos_query = lancamentos_query.filter(
+                        LancamentoFinanceiro.data_competencia >= primeiro_dia_trimestre
+                    )
+                elif periodo == 'anual':
+                    primeiro_dia_ano = hoje.replace(month=1, day=1)
+                    lancamentos_query = lancamentos_query.filter(
+                        LancamentoFinanceiro.data_competencia >= primeiro_dia_ano
+                    )
+            
+            lancamentos = lancamentos_query.all()
             
             cenarios_data.append({
                 'cenario': cenario,
@@ -1577,9 +1649,9 @@ def gerar_relatorio_comparativo_pdf(current_user):
                 'lancamentos': lancamentos
             })
         
-        # Criar PDF em memória
+        # Criar PDF em memória (paisagem)
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), topMargin=0.5*inch, bottomMargin=0.5*inch)
         styles = getSampleStyleSheet()
         
         # Gerar conteúdo comparativo
@@ -1597,16 +1669,36 @@ def gerar_relatorio_comparativo_pdf(current_user):
         doc.build(story)
         buffer.seek(0)
         
+        # Contar páginas do PDF
+        num_pages = 1
+        try:
+            import PyPDF2
+            pdf_reader = PyPDF2.PdfReader(buffer)
+            num_pages = len(pdf_reader.pages)
+            buffer.seek(0)
+        except ImportError:
+            # Estimativa baseada no número de cenários e conteúdo
+            num_pages = max(1, len(cenarios_data) + 1)
+        except Exception:
+            num_pages = max(1, len(cenarios_data) + 1)
+        
         # Preparar nome do arquivo
         nomes_cenarios = '_'.join([c['cenario'].nome.replace(' ', '_') for c in cenarios_data[:3]])
         nome_arquivo = f"relatorio_comparativo_{nomes_cenarios}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         
-        return send_file(
+        response = send_file(
             buffer,
             mimetype='application/pdf',
             as_attachment=True,
             download_name=nome_arquivo
         )
+        
+        # Adicionar metadados nos headers
+        response.headers['X-Report-Pages'] = str(num_pages)
+        response.headers['X-Report-Template'] = 'comparison'
+        response.headers['X-Report-Period'] = periodo
+        
+        return response
         
     except Exception as e:
         return jsonify({'message': f'Erro ao gerar PDF comparativo: {str(e)}'}), 500
@@ -1647,7 +1739,30 @@ def gerar_relatorio_comparativo_excel(current_user):
             if current_user.role != 'admin' and projeto.usuario_id != current_user.id:
                 return jsonify({'message': f'Acesso negado ao cenário {cenario_id}'}), 403
             
-            lancamentos = LancamentoFinanceiro.query.filter_by(cenario_id=cenario.id).all()
+            # Aplicar filtro de período
+            lancamentos_query = LancamentoFinanceiro.query.filter_by(cenario_id=cenario.id)
+            
+            if periodo != 'todos':
+                hoje = datetime.now().date()
+                if periodo == 'mensal':
+                    primeiro_dia_mes = hoje.replace(day=1)
+                    lancamentos_query = lancamentos_query.filter(
+                        LancamentoFinanceiro.data_competencia >= primeiro_dia_mes
+                    )
+                elif periodo == 'trimestral':
+                    trimestre_atual = (hoje.month - 1) // 3
+                    primeiro_mes_trimestre = trimestre_atual * 3 + 1
+                    primeiro_dia_trimestre = hoje.replace(month=primeiro_mes_trimestre, day=1)
+                    lancamentos_query = lancamentos_query.filter(
+                        LancamentoFinanceiro.data_competencia >= primeiro_dia_trimestre
+                    )
+                elif periodo == 'anual':
+                    primeiro_dia_ano = hoje.replace(month=1, day=1)
+                    lancamentos_query = lancamentos_query.filter(
+                        LancamentoFinanceiro.data_competencia >= primeiro_dia_ano
+                    )
+            
+            lancamentos = lancamentos_query.all()
             
             cenarios_data.append({
                 'cenario': cenario,
@@ -1730,6 +1845,9 @@ def gerar_relatorio_comparativo_excel(current_user):
         ws.column_dimensions['E'].width = 18
         ws.column_dimensions['F'].width = 15
         
+        # Contar número de planilhas
+        num_sheets = len(wb.worksheets)
+        
         # Criar arquivo em memória
         buffer = BytesIO()
         wb.save(buffer)
@@ -1739,12 +1857,19 @@ def gerar_relatorio_comparativo_excel(current_user):
         nomes_cenarios = '_'.join([c['cenario'].nome.replace(' ', '_') for c in cenarios_data[:3]])
         nome_arquivo = f"relatorio_comparativo_{nomes_cenarios}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         
-        return send_file(
+        response = send_file(
             buffer,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             as_attachment=True,
             download_name=nome_arquivo
         )
+        
+        # Adicionar metadados nos headers
+        response.headers['X-Report-Sheets'] = str(num_sheets)
+        response.headers['X-Report-Template'] = 'comparison'
+        response.headers['X-Report-Period'] = periodo
+        
+        return response
         
     except Exception as e:
         return jsonify({'message': f'Erro ao gerar Excel comparativo: {str(e)}'}), 500
@@ -1773,9 +1898,31 @@ def gerar_relatorio_excel(current_user, cenario_id):
         periodo = request.args.get('periodo', 'todos')
         template = request.args.get('template', 'detailed')  # executive, detailed, comparison
         
-        # Buscar análise do cenário
-        lancamentos = LancamentoFinanceiro.query.filter_by(cenario_id=cenario_id)\
-            .order_by(LancamentoFinanceiro.data_competencia).all()
+        # Buscar lançamentos do cenário com filtro de período
+        lancamentos_query = LancamentoFinanceiro.query.filter_by(cenario_id=cenario_id)
+        
+        # Aplicar filtro de período se não for 'todos'
+        if periodo != 'todos':
+            hoje = datetime.now().date()
+            if periodo == 'mensal':
+                primeiro_dia_mes = hoje.replace(day=1)
+                lancamentos_query = lancamentos_query.filter(
+                    LancamentoFinanceiro.data_competencia >= primeiro_dia_mes
+                )
+            elif periodo == 'trimestral':
+                trimestre_atual = (hoje.month - 1) // 3
+                primeiro_mes_trimestre = trimestre_atual * 3 + 1
+                primeiro_dia_trimestre = hoje.replace(month=primeiro_mes_trimestre, day=1)
+                lancamentos_query = lancamentos_query.filter(
+                    LancamentoFinanceiro.data_competencia >= primeiro_dia_trimestre
+                )
+            elif periodo == 'anual':
+                primeiro_dia_ano = hoje.replace(month=1, day=1)
+                lancamentos_query = lancamentos_query.filter(
+                    LancamentoFinanceiro.data_competencia >= primeiro_dia_ano
+                )
+        
+        lancamentos = lancamentos_query.order_by(LancamentoFinanceiro.data_competencia).all()
         
         # Verificar se há lançamentos
         if not lancamentos:
@@ -1908,6 +2055,9 @@ def gerar_relatorio_excel(current_user, cenario_id):
         ws.column_dimensions['D'].width = 15
         ws.column_dimensions['E'].width = 12
         
+        # Contar número de planilhas
+        num_sheets = len(wb.worksheets)
+        
         # Criar arquivo em memória
         buffer = BytesIO()
         wb.save(buffer)
@@ -1916,12 +2066,19 @@ def gerar_relatorio_excel(current_user, cenario_id):
         # Nome do arquivo
         nome_arquivo = f"relatorio_{cenario.nome.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         
-        return send_file(
+        response = send_file(
             buffer,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             as_attachment=True,
             download_name=nome_arquivo
         )
+        
+        # Adicionar metadados nos headers
+        response.headers['X-Report-Sheets'] = str(num_sheets)
+        response.headers['X-Report-Template'] = template
+        response.headers['X-Report-Period'] = periodo
+        
+        return response
         
     except Exception as e:
         return jsonify({'message': f'Erro ao gerar Excel: {str(e)}'}), 500
@@ -2150,6 +2307,171 @@ def restaurar_versao_cenario(current_user, cenario_id, historico_id):
             'lancamentos_restaurados': lancamentos_restaurados,
             'backup_id': backup.id
         }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'Erro interno: {str(e)}'}), 500
+
+# ============================================================================
+# ENDPOINTS PARA GERENCIAMENTO DE RELATÓRIOS
+# ============================================================================
+
+@projetos_bp.route('/relatorios', methods=['GET'])
+@token_required
+def listar_relatorios(current_user):
+    """Lista todos os relatórios do usuário atual"""
+    try:
+        if current_user.role == 'admin':
+            relatorios = Relatorio.query.order_by(Relatorio.created_at.desc()).all()
+        else:
+            relatorios = Relatorio.query.filter_by(usuario_id=current_user.id)\
+                .order_by(Relatorio.created_at.desc()).all()
+        
+        return jsonify({
+            'relatorios': [r.to_dict() for r in relatorios],
+            'total': len(relatorios)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'message': f'Erro interno: {str(e)}'}), 500
+
+@projetos_bp.route('/relatorios', methods=['POST'])
+@token_required
+def criar_relatorio(current_user):
+    """Cria um novo registro de relatório"""
+    try:
+        data = request.get_json()
+        
+        if not data or not data.get('title'):
+            return jsonify({'message': 'Título do relatório é obrigatório'}), 400
+        
+        # Validar campos obrigatórios
+        if not data.get('type') or data.get('type') not in ['pdf', 'excel']:
+            return jsonify({'message': 'Tipo deve ser pdf ou excel'}), 400
+        
+        if not data.get('template') or data.get('template') not in ['executive', 'detailed', 'comparison']:
+            return jsonify({'message': 'Template inválido'}), 400
+        
+        # Criar relatório
+        relatorio = Relatorio(
+            usuario_id=current_user.id,
+            title=data.get('title'),
+            type=data.get('type'),
+            template=data.get('template'),
+            scenario=data.get('scenario'),
+            scenario_id=data.get('scenarioId'),
+            scenario_ids=data.get('scenarioIds'),
+            size=data.get('size'),
+            pages=int(data.get('pages')) if data.get('pages') else None,
+            sheets=int(data.get('sheets')) if data.get('sheets') else None,
+            downloads=data.get('downloads', 1),
+            status=data.get('status', 'completed'),
+            periodo=data.get('periodo', 'todos'),
+            descricao=data.get('descricao')
+        )
+        
+        db.session.add(relatorio)
+        db.session.commit()
+        
+        # Log
+        log = LogSistema(
+            usuario_id=current_user.id,
+            acao='REPORT_CREATED',
+            detalhes={
+                'relatorio_id': relatorio.id,
+                'title': relatorio.title,
+                'type': relatorio.type
+            }
+        )
+        db.session.add(log)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Relatório criado com sucesso',
+            'relatorio': relatorio.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'Erro interno: {str(e)}'}), 500
+
+@projetos_bp.route('/relatorios/<int:relatorio_id>', methods=['GET'])
+@token_required
+def obter_relatorio(current_user, relatorio_id):
+    """Obtém um relatório específico"""
+    try:
+        relatorio = Relatorio.query.get_or_404(relatorio_id)
+        
+        # Verificar permissão
+        if current_user.role != 'admin' and relatorio.usuario_id != current_user.id:
+            return jsonify({'message': 'Acesso negado'}), 403
+        
+        return jsonify({'relatorio': relatorio.to_dict()}), 200
+        
+    except Exception as e:
+        return jsonify({'message': f'Erro interno: {str(e)}'}), 500
+
+@projetos_bp.route('/relatorios/<int:relatorio_id>', methods=['PUT'])
+@token_required
+def atualizar_relatorio(current_user, relatorio_id):
+    """Atualiza um relatório (ex: incrementar downloads)"""
+    try:
+        relatorio = Relatorio.query.get_or_404(relatorio_id)
+        
+        # Verificar permissão
+        if current_user.role != 'admin' and relatorio.usuario_id != current_user.id:
+            return jsonify({'message': 'Acesso negado'}), 403
+        
+        data = request.get_json()
+        
+        # Atualizar campos permitidos
+        if data.get('downloads') is not None:
+            relatorio.downloads = data.get('downloads')
+        if data.get('title'):
+            relatorio.title = data.get('title')
+        if data.get('descricao') is not None:
+            relatorio.descricao = data.get('descricao')
+        
+        relatorio.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Relatório atualizado com sucesso',
+            'relatorio': relatorio.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'Erro interno: {str(e)}'}), 500
+
+@projetos_bp.route('/relatorios/<int:relatorio_id>', methods=['DELETE'])
+@token_required
+def deletar_relatorio(current_user, relatorio_id):
+    """Deleta um relatório"""
+    try:
+        relatorio = Relatorio.query.get_or_404(relatorio_id)
+        
+        # Verificar permissão
+        if current_user.role != 'admin' and relatorio.usuario_id != current_user.id:
+            return jsonify({'message': 'Acesso negado'}), 403
+        
+        title = relatorio.title
+        
+        # Log antes de deletar
+        log = LogSistema(
+            usuario_id=current_user.id,
+            acao='REPORT_DELETED',
+            detalhes={
+                'relatorio_id': relatorio_id,
+                'title': title
+            }
+        )
+        db.session.add(log)
+        
+        db.session.delete(relatorio)
+        db.session.commit()
+        
+        return jsonify({'message': 'Relatório deletado com sucesso'}), 200
         
     except Exception as e:
         db.session.rollback()

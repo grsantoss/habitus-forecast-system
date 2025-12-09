@@ -32,7 +32,7 @@ try:
         @auth_ns.doc('register_user')
         @auth_ns.expect(register_schema)
         @auth_ns.marshal_with(user_schema, code=201)
-        @auth_ns.response(400, 'Dados inválidos')
+        @auth_ns.response(400, 'Dados inválidos - campos obrigatórios: nome, email, password')
         @auth_ns.response(409, 'Email já cadastrado')
         def post(self):
             """
@@ -40,6 +40,24 @@ try:
             
             Cria uma nova conta de usuário. O status inicial será 'pending'
             até aprovação do administrador.
+            
+            **Campos Obrigatórios:**
+            - nome (string): Nome completo do usuário
+            - email (string): Email válido
+            - password (string): Senha do usuário
+            
+            **Resposta (201):**
+            ```json
+            {
+              "message": "Usuário criado com sucesso",
+              "user": {
+                "id": 1,
+                "nome": "João Silva",
+                "email": "joao@exemplo.com",
+                ...
+              }
+            }
+            ```
             """
             pass
     
@@ -54,6 +72,22 @@ try:
             Obter dados do usuário atual
             
             Retorna os dados do usuário autenticado baseado no token JWT.
+            
+            **Resposta (200):**
+            ```json
+            {
+              "user": {
+                "id": 1,
+                "nome": "João Silva",
+                "email": "joao@exemplo.com",
+                "role": "usuario",
+                ...
+              }
+            }
+            ```
+            
+            **Importante:** A resposta está encapsulada na chave "user". 
+            Extrair o objeto user antes de acessar campos como email, nome, etc.
             """
             pass
     

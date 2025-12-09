@@ -76,9 +76,9 @@ const Settings = () => {
         cargo: formData.get('position') || document.getElementById('position').value
       };
       
-      console.log('Dados do perfil a enviar:', profileData);
       
-      const response = await fetch('http://localhost:5000/api/settings/profile', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${apiUrl}/settings/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -89,7 +89,6 @@ const Settings = () => {
       
       if (response.ok) {
         const result = await response.json();
-        console.log('Perfil atualizado:', result);
         
         // Atualizar dados do usuário no contexto
         if (result.user) {
@@ -139,9 +138,9 @@ const Settings = () => {
         confirmPassword
       };
       
-      console.log('Dados da senha a enviar:', { currentPassword: '***', newPassword: '***', confirmPassword: '***' });
       
-      const response = await fetch('http://localhost:5000/api/settings/password', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${apiUrl}/settings/password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -152,7 +151,6 @@ const Settings = () => {
       
       if (response.ok) {
         const result = await response.json();
-        console.log('Senha alterada:', result);
         
         // Limpar campos
         setCurrentPassword('');
@@ -186,12 +184,6 @@ const Settings = () => {
     
     try {
       const token = localStorage.getItem('token');
-
-      if (user?.role === 'admin' && !selectedClientId) {
-        setErrorMessage('Selecione um cliente para salvar os cenários.');
-        setIsSubmittingScenarios(false);
-        return;
-      }
       
       // Validar antes de enviar
       const pessimistaValue = typeof scenarios.pessimista === 'string' 
@@ -232,14 +224,13 @@ const Settings = () => {
         agressivo: agressivoValue
       };
       
-      console.log('Token:', token);
-      console.log('Dados a enviar:', scenariosToSend);
       
       const qs = user?.role === 'admin' && selectedClientId 
         ? `?usuario_id=${selectedClientId}` 
         : '';
 
-      const response = await fetch(`http://localhost:5000/api/settings/cenarios${qs}`, {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${apiUrl}/settings/cenarios${qs}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -250,7 +241,6 @@ const Settings = () => {
       
       if (response.ok) {
         const result = await response.json();
-        console.log('Cenários salvos:', result);
         
         // Mostrar mensagem de sucesso
         setSuccessMessage('Cenários salvos com sucesso!');
@@ -334,7 +324,8 @@ const Settings = () => {
           ? `?usuario_id=${selectedClientId}` 
           : '';
 
-        const response = await fetch(`http://localhost:5000/api/settings/cenarios${qs}`, {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const response = await fetch(`${apiUrl}/settings/cenarios${qs}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -354,17 +345,7 @@ const Settings = () => {
       }
     };
 
-    // Admin precisa selecionar cliente para carregar cenários dele
-    if (user?.role === 'admin' && !selectedClientId) {
-      setScenarios({
-        pessimista: 0,
-        realista: 0,
-        otimista: 0,
-        agressivo: 0
-      });
-      return;
-    }
-
+    // Carregar cenários: se admin não tem cliente selecionado, carrega seus próprios cenários
     loadScenarios();
   }, [user, selectedClientId]);
 
@@ -375,7 +356,8 @@ const Settings = () => {
 
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:5000/api/admin/usuarios?page=1&per_page=100', {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const response = await fetch(`${apiUrl}/admin/usuarios?page=1&per_page=100`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -619,7 +601,7 @@ const Settings = () => {
               </div>
 
               {/* Seletor de cliente apenas para admin */}
-              {user?.role === 'admin' && clients.length > 0 && (
+              {user?.role === 'admin' && (
                 <div className="flex items-center gap-3">
                   <Label className="text-sm font-medium text-gray-700">Cliente:</Label>
                   <select
@@ -637,7 +619,7 @@ const Settings = () => {
                       }
                     }}
                   >
-                    <option value="">Selecione um cliente</option>
+                    <option value="">Meus cenários (admin)</option>
                     {clients.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.nome} ({c.email})

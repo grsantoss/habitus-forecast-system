@@ -115,22 +115,70 @@ O TestSprite usará automaticamente:
 |------|--------|
 | Configuração TestSprite | ✅ Completa |
 | Plano de Testes | ✅ Gerado (10 casos) |
-| Backend Rodando | ⏳ Precisa iniciar |
-| Testes Executados | ⏳ Aguardando backend |
+| Backend Rodando | ✅ Rodando na porta 5000 |
+| Testes Executados | ✅ Executados (4/10 passaram - 40%) |
 
-## ⚠️ Importante
+## 📈 Resultados dos Testes
 
-**O backend DEVE estar rodando** antes de executar os testes do TestSprite. Caso contrário, os testes falharão com erro de conexão.
+### Última Execução: 2025-12-09
+
+**Taxa de Sucesso:** 40% (4/10 testes passando)
+
+### Testes que Passaram ✅ (4/10)
+1. **TC001** - POST /api/auth/login ✅
+2. **TC004** - POST /api/auth/logout ✅ (Blacklist implementada!)
+3. **TC008** - GET /api/dashboard/stats ✅
+4. **TC010** - GET /api/admin/usuarios ✅
+
+### Testes Corrigidos Manualmente ✅ (5)
+1. **TC002** - POST /api/auth/register ✅ (campo `nome` adicionado)
+2. **TC003** - GET /api/auth/me ✅ (estrutura de resposta corrigida)
+3. **TC005** - GET /api/projetos ✅ (extração de `projetos` corrigida)
+4. **TC006** - POST /api/projetos ✅ (campos corrigidos)
+5. **TC009** - POST /api/projetos/<id>/cenarios ✅ (URL e campos corrigidos)
+
+### Testes que Ainda Precisam Atenção ⚠️ (1)
+1. **TC007** - POST /api/upload-planilha (requer arquivo Excel válido)
+
+## ⚠️ Problemas Identificados e Resolvidos
+
+### ✅ Resolvido - Segurança
+- **Logout invalida tokens**: Blacklist de tokens implementada e funcionando! ✅
+
+### ✅ Resolvido - Funcionalidade
+- Testes corrigidos para enviar campos obrigatórios corretos ✅
+- Estrutura de resposta corrigida nos testes ✅
+
+### ⚠️ Problema Conhecido
+- **TestSprite regenera arquivos**: Correções manuais são perdidas quando TestSprite regenera código
+- **Solução:** Criar script de correção automática ou melhorar documentação da API
 
 ## 📝 Próximos Passos
 
 1. ✅ Configuração completa
 2. ✅ Plano de testes gerado
-3. ⏳ Iniciar backend (você precisa fazer)
-4. ⏳ Executar testes TestSprite
-5. ⏳ Revisar relatórios gerados
+3. ✅ Backend iniciado
+4. ✅ Testes executados
+5. ✅ Relatórios gerados
+6. ✅ Blacklist de tokens implementada
+7. ✅ Testes corrigidos manualmente
+8. ⏳ Re-executar testes para validar correções
+9. ⏳ Criar script de correção automática
+10. ⏳ Melhorar documentação da API (OpenAPI/Swagger)
+
+## 📄 Relatórios Gerados
+
+- ✅ `testsprite_tests/tmp/raw_report.md` - Relatório bruto dos testes
+- ✅ `testsprite_tests/testsprite-mcp-test-report.md` - Relatório completo com análises detalhadas
+- ✅ `testsprite_tests/RELATORIO_INVESTIGACAO_TESTES.md` - Investigação completa dos problemas
+- ✅ `testsprite_tests/RELATORIO_VALIDACAO_CORRECOES.md` - Validação das correções
+- ✅ `testsprite_tests/RELATORIO_EXECUCAO_FINAL.md` - Relatório final de execução
+- ✅ `testsprite_tests/CORRECOES_APLICADAS.md` - Documentação das correções aplicadas
+- ✅ `testsprite_tests/RESUMO_EXECUTIVO.md` - Resumo executivo
+- ✅ `testsprite_tests/RESUMO_VALIDACAO.md` - Resumo de validação
 
 ---
 
-**Última atualização:** $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+**Última atualização:** 2025-12-09  
+**Status:** Correções aplicadas manualmente - Aguardando re-execução para validação
 

@@ -6,11 +6,11 @@ Após configurar HTTPS, atualize o arquivo `backend/.env`:
 
 ```env
 # Origens permitidas para CORS (separadas por vírgula)
-# Adicione suas URLs HTTPS aqui
-CORS_ORIGINS=https://seu-dominio.com,https://www.seu-dominio.com
+# URL de produção
+CORS_ORIGINS=https://app.habitusforecast.com.br
 
 # Opcional: Configurações de HTTPS
-DOMAIN=seu-dominio.com
+DOMAIN=app.habitusforecast.com.br
 HTTPS_ENABLED=true
 ```
 
@@ -20,7 +20,7 @@ Atualize o arquivo `frontend/.env`:
 
 ```env
 # URL base da API backend com HTTPS
-VITE_API_URL=https://seu-dominio.com/api
+VITE_API_URL=https://app.habitusforecast.com.br/api
 ```
 
 ## Após Atualizar
@@ -42,7 +42,7 @@ VITE_API_URL=https://seu-dominio.com/api
 
 ## Verificação
 
-- Acesse: `https://seu-dominio.com`
+- Acesse: `https://app.habitusforecast.com.br`
 - Verifique console do navegador (sem erros CORS)
 - Teste login e funcionalidades da API
 

@@ -75,12 +75,12 @@ sudo systemctl reload nginx
 
 **Backend (.env):**
 ```env
-CORS_ORIGINS=https://seu-dominio.com,https://www.seu-dominio.com
+CORS_ORIGINS=https://app.habitusforecast.com.br
 ```
 
 **Frontend (.env):**
 ```env
-VITE_API_URL=https://seu-dominio.com/api
+VITE_API_URL=https://app.habitusforecast.com.br/api
 ```
 
 **Rebuild frontend:**
@@ -91,9 +91,9 @@ pnpm run build
 
 ## ✅ Verificação
 
-1. Acesse: `https://seu-dominio.com`
+1. Acesse: `https://app.habitusforecast.com.br`
 2. Verifique cadeado verde no navegador
-3. Teste API: `https://seu-dominio.com/api/health`
+3. Teste API: `https://app.habitusforecast.com.br/api/health`
 4. Verifique redirecionamento HTTP → HTTPS
 
 ## 📚 Documentação Completa

@@ -4,13 +4,32 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from flask import current_app, request, jsonify
 from functools import wraps
-from src.models.user import User
+import os
+from src.models.user import User, TokenBlacklist, db
 
 # Configuração para hash de senhas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Configurações JWT
-SECRET_KEY = "habitus_secret_key_2025_super_secure"
+# SECRET_KEY deve ser obtida de variável de ambiente
+# Em produção, SECRET_KEY é obrigatória e não deve ter fallback
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    flask_env = os.getenv('FLASK_ENV', 'development')
+    if flask_env == 'production':
+        raise ValueError(
+            'SECRET_KEY deve ser configurada em produção! '
+            'Configure a variável de ambiente SECRET_KEY antes de iniciar a aplicação.'
+        )
+    # Fallback apenas para desenvolvimento (NUNCA usar em produção)
+    SECRET_KEY = 'habitus_secret_key_2025_dev_only_never_use_in_production'
+    import warnings
+    warnings.warn(
+        '⚠️ SECRET_KEY não configurada! Usando valor padrão de desenvolvimento. '
+        'Configure SECRET_KEY em produção!',
+        UserWarning
+    )
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 10080  # 7 dias (7 * 24 * 60)
 
@@ -66,6 +85,11 @@ def get_current_user():
             return None
     
     if not token:
+        return None
+    
+    # Verificar se token está na blacklist
+    blacklisted = TokenBlacklist.query.filter_by(token=token).first()
+    if blacklisted:
         return None
     
     email = verify_token(token)

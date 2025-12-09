@@ -269,3 +269,83 @@ class HistoricoCenario(db.Model):
     
     def __repr__(self):
         return f'<HistoricoCenario {self.id} - Cenário {self.cenario_id}>'
+
+
+class Relatorio(db.Model):
+    __tablename__ = 'relatorios'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
+    title = db.Column(db.String(255), nullable=False)
+    type = db.Column(db.Enum('pdf', 'excel', name='report_type'), nullable=False)
+    template = db.Column(db.Enum('executive', 'detailed', 'comparison', name='report_template'), nullable=False)
+    scenario = db.Column(db.String(255), nullable=True)  # Nome do(s) cenário(s)
+    scenario_id = db.Column(db.Integer, db.ForeignKey('cenarios.id'), nullable=True)  # ID único (null para comparativos)
+    scenario_ids = db.Column(db.JSON, nullable=True)  # Array de IDs para comparativos
+    size = db.Column(db.String(50), nullable=True)  # Tamanho em MB como string
+    pages = db.Column(db.Integer, nullable=True)  # Número de páginas (null para Excel)
+    sheets = db.Column(db.Integer, nullable=True)  # Número de planilhas (null para PDF)
+    downloads = db.Column(db.Integer, default=0)
+    status = db.Column(db.Enum('completed', 'scheduled', name='report_status'), default='completed')
+    periodo = db.Column(db.String(50), default='todos')  # todos, mensal, trimestral, anual
+    descricao = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    usuario = db.relationship('User', backref='relatorios')
+    cenario = db.relationship('Cenario', backref='relatorios')
+    
+    def to_dict(self):
+        # Formatar data em português
+        date_str = None
+        if self.created_at:
+            try:
+                import locale
+                locale.setlocale(locale.LC_TIME, 'pt_BR.UTF-8')
+            except:
+                pass  # Se não conseguir definir locale, usar formato padrão
+            
+            meses_pt = {
+                1: 'janeiro', 2: 'fevereiro', 3: 'março', 4: 'abril',
+                5: 'maio', 6: 'junho', 7: 'julho', 8: 'agosto',
+                9: 'setembro', 10: 'outubro', 11: 'novembro', 12: 'dezembro'
+            }
+            
+            mes_nome = meses_pt.get(self.created_at.month, self.created_at.strftime('%B'))
+            date_str = f"{self.created_at.day:02d} de {mes_nome} de {self.created_at.year} às {self.created_at.hour:02d}:{self.created_at.minute:02d}"
+        
+        return {
+            'id': self.id,
+            'title': self.title,
+            'date': date_str,
+            'type': self.type,
+            'template': self.template,
+            'scenario': self.scenario,
+            'scenarioId': self.scenario_id,
+            'scenarioIds': self.scenario_ids if isinstance(self.scenario_ids, list) else (self.scenario_ids if self.scenario_ids else None),
+            'size': self.size,
+            'pages': str(self.pages) if self.pages else None,
+            'sheets': str(self.sheets) if self.sheets else None,
+            'downloads': self.downloads,
+            'status': self.status,
+            'periodo': self.periodo,
+            'descricao': self.descricao,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+    
+    def __repr__(self):
+        return f'<Relatorio {self.title} - {self.type}>'
+
+
+class TokenBlacklist(db.Model):
+    """Modelo para armazenar tokens JWT invalidados (blacklist)"""
+    __tablename__ = 'token_blacklist'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(500), unique=True, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    def __repr__(self):
+        return f'<TokenBlacklist {self.id}>'

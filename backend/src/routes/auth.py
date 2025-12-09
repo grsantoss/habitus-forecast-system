@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from datetime import timedelta
-from src.models.user import db, User, LogSistema
+from src.models.user import db, User, LogSistema, TokenBlacklist
 from src.auth import authenticate_user, create_access_token, token_required, get_current_user, ACCESS_TOKEN_EXPIRE_MINUTES
 
 auth_bp = Blueprint('auth', __name__)
@@ -127,8 +127,25 @@ def get_current_user_info(current_user):
 @auth_bp.route('/logout', methods=['POST'])
 @token_required
 def logout(current_user):
-    """Endpoint de logout (apenas para log)"""
+    """Endpoint de logout - invalida token JWT adicionando à blacklist"""
     try:
+        # Extrair token do header Authorization
+        auth_header = request.headers.get('Authorization')
+        token = None
+        if auth_header:
+            try:
+                token = auth_header.split(" ")[1]  # Bearer <token>
+            except IndexError:
+                pass
+        
+        # Adicionar token à blacklist se existir
+        if token:
+            # Verificar se token já não está na blacklist (evitar duplicatas)
+            existing_blacklist = TokenBlacklist.query.filter_by(token=token).first()
+            if not existing_blacklist:
+                blacklisted_token = TokenBlacklist(token=token)
+                db.session.add(blacklisted_token)
+        
         # Log de logout
         log = LogSistema(
             usuario_id=current_user.id,
@@ -141,4 +158,5 @@ def logout(current_user):
         return jsonify({'message': 'Logout realizado com sucesso'})
         
     except Exception as e:
+        db.session.rollback()
         return jsonify({'message': f'Erro interno: {str(e)}'}), 500

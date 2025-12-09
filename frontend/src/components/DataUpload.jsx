@@ -45,15 +45,31 @@ const DataUpload = () => {
   };
 
   const handleFileSelect = (selectedFile) => {
-    if (selectedFile && (selectedFile.name.endsWith('.xlsx') || selectedFile.name.endsWith('.xls'))) {
-      setFile(selectedFile);
-      setError('');
-      setValidationResult(null);
-      setUploadResult(null);
-      validateFile(selectedFile);
-    } else {
-      setError('Por favor, selecione um arquivo Excel (.xlsx ou .xls)');
+    if (!selectedFile) {
+      setError('Por favor, selecione um arquivo');
+      return;
     }
+
+    // Validar extensão
+    if (!selectedFile.name.endsWith('.xlsx') && !selectedFile.name.endsWith('.xls')) {
+      setError('Por favor, selecione um arquivo Excel (.xlsx ou .xls)');
+      return;
+    }
+
+    // Validar tamanho (16MB máximo)
+    const MAX_FILE_SIZE = 16 * 1024 * 1024; // 16MB em bytes
+    if (selectedFile.size > MAX_FILE_SIZE) {
+      const sizeInMB = (selectedFile.size / 1024 / 1024).toFixed(2);
+      setError(`Arquivo muito grande (${sizeInMB} MB). O tamanho máximo permitido é 16 MB.`);
+      return;
+    }
+
+    // Arquivo válido
+    setFile(selectedFile);
+    setError('');
+    setValidationResult(null);
+    setUploadResult(null);
+    validateFile(selectedFile);
   };
 
   const handleDrop = (e) => {
@@ -75,11 +91,30 @@ const DataUpload = () => {
 
   const validateFile = async (fileToValidate) => {
     setValidating(true);
+    setError('');
     try {
       const response = await uploadAPI.validateSpreadsheet(fileToValidate);
       setValidationResult(response.data);
     } catch (error) {
-      setError(error.response?.data?.message || 'Erro ao validar arquivo');
+      // Tratamento específico de erros
+      if (error.response) {
+        const status = error.response.status;
+        const message = error.response.data?.message || 'Erro ao validar arquivo';
+        
+        if (status === 400) {
+          setError(message);
+        } else if (status === 413) {
+          setError('Arquivo muito grande. O tamanho máximo permitido é 16 MB.');
+        } else if (status === 500) {
+          setError('Erro no servidor ao validar arquivo. Tente novamente mais tarde.');
+        } else {
+          setError(message);
+        }
+      } else if (error.request) {
+        setError('Erro de conexão. Verifique sua internet e tente novamente.');
+      } else {
+        setError('Erro ao validar arquivo. Tente novamente.');
+      }
     } finally {
       setValidating(false);
     }
@@ -93,39 +128,100 @@ const DataUpload = () => {
     setError('');
 
     try {
-      // Simular progresso
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return prev;
-          }
-          return prev + 10;
-        });
-      }, 200);
-
-      const response = await uploadAPI.uploadSpreadsheet(file);
+      // Criar FormData e XMLHttpRequest para progresso real
+      const formData = new FormData();
+      formData.append('file', file);
       
-      clearInterval(progressInterval);
+      const xhr = new XMLHttpRequest();
+      const token = localStorage.getItem('token');
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      
+      // Configurar progresso real
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const percentComplete = Math.round((e.loaded / e.total) * 90); // Até 90%, depois completa quando receber resposta
+          setUploadProgress(percentComplete);
+        }
+      });
+      
+      // Promise para aguardar resposta
+      const uploadPromise = new Promise((resolve, reject) => {
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const response = JSON.parse(xhr.responseText);
+              resolve({ data: response });
+            } catch (e) {
+              reject(new Error('Resposta inválida do servidor'));
+            }
+          } else {
+            try {
+              const errorResponse = JSON.parse(xhr.responseText);
+              reject({ response: { status: xhr.status, data: errorResponse } });
+            } catch (e) {
+              reject({ response: { status: xhr.status, data: { message: 'Erro ao processar resposta do servidor' } } });
+            }
+          }
+        });
+        
+        xhr.addEventListener('error', () => {
+          reject({ request: true });
+        });
+        
+        xhr.addEventListener('timeout', () => {
+          reject({ code: 'ECONNABORTED' });
+        });
+        
+        xhr.addEventListener('abort', () => {
+          reject({ code: 'ABORTED' });
+        });
+        
+        xhr.open('POST', `${apiUrl}/upload-planilha`);
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.timeout = 300000; // 5 minutos
+        xhr.send(formData);
+      });
+
+      const response = await uploadPromise;
+      
       setUploadProgress(100);
       setUploadResult(response.data);
+      
       // Guardar o projeto do upload para o Dashboard carregar os dados reais (FDC-REAL)
       if (response?.data?.projeto_id) {
         localStorage.setItem('lastUploadedProjectId', String(response.data.projeto_id));
       }
       
       // Recarregar histórico completo após upload bem-sucedido
-      console.log('Upload bem-sucedido, recarregando histórico...');
       await fetchUploadHistory();
       
       // Aguardar um pouco antes de redirecionar para garantir que o histórico seja atualizado
       setTimeout(() => {
-        console.log('Redirecionando para dashboard...');
         navigate('/dashboard');
       }, 3000);
       
     } catch (error) {
-      setError(error.response?.data?.message || 'Erro ao fazer upload do arquivo');
+      // Tratamento específico de erros
+      if (error.response) {
+        const status = error.response.status;
+        const message = error.response.data?.message || 'Erro ao fazer upload do arquivo';
+        
+        if (status === 400) {
+          setError(message);
+        } else if (status === 413) {
+          setError('Arquivo muito grande. O tamanho máximo permitido é 16 MB.');
+        } else if (status === 500) {
+          setError('Erro no servidor ao processar arquivo. Tente novamente mais tarde.');
+        } else if (status === 408 || error.code === 'ECONNABORTED') {
+          setError('Tempo limite excedido. O arquivo pode ser muito grande ou a conexão está lenta.');
+        } else {
+          setError(message);
+        }
+      } else if (error.request) {
+        setError('Erro de conexão. Verifique sua internet e tente novamente.');
+      } else {
+        setError('Erro ao fazer upload do arquivo. Tente novamente.');
+      }
     } finally {
       setUploading(false);
     }
@@ -160,7 +256,8 @@ const DataUpload = () => {
 
   const handleDownload = async (uploadItem) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/uploads/${uploadItem.id}/download`, {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${apiUrl}/uploads/${uploadItem.id}/download`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -188,7 +285,8 @@ const DataUpload = () => {
   const handleDeleteUpload = async (uploadId) => {
     if (window.confirm('Tem certeza que deseja excluir este upload?')) {
       try {
-        const response = await fetch(`http://localhost:5000/api/uploads/${uploadId}`, {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const response = await fetch(`${apiUrl}/uploads/${uploadId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -258,7 +356,8 @@ const DataUpload = () => {
   // Função para buscar histórico de uploads
   const fetchUploadHistory = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/uploads/history', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${apiUrl}/uploads/history`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
@@ -267,8 +366,6 @@ const DataUpload = () => {
       
       if (response.ok) {
         const history = await response.json();
-        console.log('Histórico recebido do backend:', history);
-        console.log('Quantidade de itens no histórico:', history.length);
         setUploadHistory(history);
       } else {
         console.error('Erro na resposta da API:', response.status, response.statusText);

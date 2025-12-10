@@ -7,6 +7,7 @@ Create Date: 2025-12-08 15:06:46.697022
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = 'ac814967bae3'
@@ -79,9 +80,12 @@ def upgrade() -> None:
         if not result.scalar():
             op.execute("CREATE TYPE report_status AS ENUM ('completed', 'scheduled')")
         
-        report_type_enum = sa.Enum('pdf', 'excel', name='report_type', create_type=False)
-        report_template_enum = sa.Enum('executive', 'detailed', 'comparison', name='report_template', create_type=False)
-        report_status_enum = sa.Enum('completed', 'scheduled', name='report_status', create_type=False)
+        # Usar postgresql.ENUM diretamente com create_type=False
+        # Os tipos já foram criados manualmente acima, então não tentar criar novamente
+        # Usar postgresql.ENUM evita o evento _on_table_create que tenta criar tipos
+        report_type_enum = postgresql.ENUM('pdf', 'excel', name='report_type', create_type=False)
+        report_template_enum = postgresql.ENUM('executive', 'detailed', 'comparison', name='report_template', create_type=False)
+        report_status_enum = postgresql.ENUM('completed', 'scheduled', name='report_status', create_type=False)
     else:
         # Para SQLite, usar String com constraint CHECK
         report_type_enum = sa.String(50)

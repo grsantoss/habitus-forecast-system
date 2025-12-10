@@ -1,7 +1,7 @@
 """Add relatorios table
 
 Revision ID: ac814967bae3
-Revises: 
+Revises: 0001_initial
 Create Date: 2025-12-08 15:06:46.697022
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = 'ac814967bae3'
-down_revision = None
+down_revision = '0001_initial'
 branch_labels = None
 depends_on = None
 

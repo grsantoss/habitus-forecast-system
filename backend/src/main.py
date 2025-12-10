@@ -221,7 +221,9 @@ if database_url and database_url.startswith('postgresql://'):
         try:
             from sqlalchemy import create_engine, text
             # Criar engine temporário para testar
-            test_engine = create_engine(database_url, connect_args={'connect_timeout': 2})
+            # Em produção, usar timeout maior para aguardar DB inicializar
+            timeout = 10 if os.getenv('FLASK_ENV') == 'production' else 2
+            test_engine = create_engine(database_url, connect_args={'connect_timeout': timeout})
             # Tentar conectar brevemente
             with test_engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
@@ -237,6 +239,13 @@ if database_url and database_url.startswith('postgresql://'):
                 database_url = None
             else:
                 # Outro tipo de erro (conexão recusada, timeout, etc.)
+                # Em produção, NÃO fazer fallback para SQLite
+                if os.getenv('FLASK_ENV') == 'production':
+                    raise Exception(
+                        f"❌ Falha ao conectar ao PostgreSQL em produção: {error_msg}\n"
+                        f"   Verifique se DATABASE_URL está correta e se o PostgreSQL está rodando.\n"
+                        f"   DATABASE_URL: {database_url[:50]}..."
+                    )
                 # Só mostrar se não for erro de encoding
                 print(f"ℹ️ Não foi possível conectar ao PostgreSQL.")
                 print("ℹ️ Usando SQLite local para desenvolvimento.")

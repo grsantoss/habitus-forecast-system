@@ -57,10 +57,27 @@ def upgrade() -> None:
     
     # Criar tipos ENUM para PostgreSQL (SQLite não suporta ENUM nativo)
     if is_postgres:
-        # Criar tipos ENUM para PostgreSQL
-        op.execute("CREATE TYPE report_type AS ENUM ('pdf', 'excel')")
-        op.execute("CREATE TYPE report_template AS ENUM ('executive', 'detailed', 'comparison')")
-        op.execute("CREATE TYPE report_status AS ENUM ('completed', 'scheduled')")
+        # Verificar e criar tipos ENUM apenas se não existirem
+        # Verificar se report_type existe
+        result = bind.execute(sa.text(
+            "SELECT EXISTS(SELECT 1 FROM pg_type WHERE typname = 'report_type')"
+        ))
+        if not result.scalar():
+            op.execute("CREATE TYPE report_type AS ENUM ('pdf', 'excel')")
+        
+        # Verificar se report_template existe
+        result = bind.execute(sa.text(
+            "SELECT EXISTS(SELECT 1 FROM pg_type WHERE typname = 'report_template')"
+        ))
+        if not result.scalar():
+            op.execute("CREATE TYPE report_template AS ENUM ('executive', 'detailed', 'comparison')")
+        
+        # Verificar se report_status existe
+        result = bind.execute(sa.text(
+            "SELECT EXISTS(SELECT 1 FROM pg_type WHERE typname = 'report_status')"
+        ))
+        if not result.scalar():
+            op.execute("CREATE TYPE report_status AS ENUM ('completed', 'scheduled')")
         
         report_type_enum = sa.Enum('pdf', 'excel', name='report_type', create_type=False)
         report_template_enum = sa.Enum('executive', 'detailed', 'comparison', name='report_template', create_type=False)

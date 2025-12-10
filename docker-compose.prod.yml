@@ -16,10 +16,16 @@ services:
     # Não usar hot reload em produção
     command: >
       sh -c "
+        echo '⏳ Aguardando banco de dados estar pronto...' &&
+        until pg_isready -h db -U habitus -d habitus_forecast 2>/dev/null; do
+          echo '   Aguardando PostgreSQL...' &&
+          sleep 2
+        done &&
         echo '🔄 Executando migrações do banco de dados...' &&
+        cd /app &&
         if bash scripts/run_migrations.sh; then
           echo '🚀 Iniciando servidor Gunicorn...' &&
-          gunicorn --config gunicorn_config.py wsgi:application
+          exec gunicorn --config gunicorn_config.py wsgi:application
         else
           echo '❌ ERRO: Falha ao executar migrações!' >&2 &&
           echo '   Verifique os logs acima para mais detalhes.' >&2 &&

@@ -32,6 +32,9 @@ COPY . .
 # Criar diretórios necessários
 RUN mkdir -p /app/database /app/uploads /app/logs
 
+# Tornar scripts executáveis
+RUN chmod +x scripts/*.sh 2>/dev/null || true
+
 # Criar usuário não-root para segurança
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app

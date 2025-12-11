@@ -31,6 +31,7 @@ fi
 
 echo -e "${CYAN}📋 Passo 2: Removendo arquivos conflitantes...${NC}"
 # Remover arquivos não rastreados que estão causando conflito
+rm -f "backend/src/static/favicon.svg" 2>/dev/null || true
 rm -f "backend/src/static/assets/favicon habitus forecast-sSShFcmp.svg" 2>/dev/null || true
 rm -f "backend/src/static/assets/habitus forecast_v2-BSD36CHs.svg" 2>/dev/null || true
 rm -f "backend/src/static/assets/habitus-forecast-login-CCRypjXp.svg" 2>/dev/null || true

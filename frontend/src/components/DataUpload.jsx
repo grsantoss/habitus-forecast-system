@@ -176,7 +176,7 @@ const DataUpload = () => {
           reject({ code: 'ABORTED' });
         });
         
-        xhr.open('POST', `${apiUrl}/upload-planilha`);
+        xhr.open('POST', `${API_BASE_URL}/upload-planilha`);
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         xhr.timeout = 300000; // 5 minutos
         xhr.send(formData);

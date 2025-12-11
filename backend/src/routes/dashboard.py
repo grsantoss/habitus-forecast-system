@@ -417,6 +417,12 @@ def atualizar_saldo_inicial(current_user):
         if current_user.role == 'admin':
             usuario_id_param = request.args.get('usuario_id', type=int)
             if usuario_id_param:
+                # Validar se o usuário existe
+                target_user = User.query.get(usuario_id_param)
+                if not target_user:
+                    return jsonify({
+                        'message': f'Usuário com ID {usuario_id_param} não encontrado'
+                    }), 404
                 target_user_id = usuario_id_param
         
         # Buscar projeto do usuário (ou do usuário alvo)
@@ -475,6 +481,12 @@ def obter_saldo_inicial(current_user):
         if current_user.role == 'admin':
             usuario_id_param = request.args.get('usuario_id', type=int)
             if usuario_id_param:
+                # Validar se o usuário existe
+                target_user = User.query.get(usuario_id_param)
+                if not target_user:
+                    return jsonify({
+                        'message': f'Usuário com ID {usuario_id_param} não encontrado'
+                    }), 404
                 target_user_id = usuario_id_param
 
         # Buscar projeto do usuário (ou do usuário alvo)
@@ -521,6 +533,12 @@ def atualizar_ponto_equilibrio(current_user):
         if current_user.role == 'admin':
             usuario_id_param = request.args.get('usuario_id', type=int)
             if usuario_id_param:
+                # Validar se o usuário existe
+                target_user = User.query.get(usuario_id_param)
+                if not target_user:
+                    return jsonify({
+                        'message': f'Usuário com ID {usuario_id_param} não encontrado'
+                    }), 404
                 target_user_id = usuario_id_param
 
         # Buscar projeto do usuário (ou do usuário alvo)

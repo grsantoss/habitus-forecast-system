@@ -20,6 +20,12 @@ def get_cenarios_config(current_user):
         # Determinar usuário alvo
         target_user_id = current_user.id
         if current_user.role == 'admin' and usuario_id_param:
+            # Validar se o usuário existe
+            target_user = User.query.get(usuario_id_param)
+            if not target_user:
+                return jsonify({
+                    'message': f'Usuário com ID {usuario_id_param} não encontrado'
+                }), 404
             target_user_id = usuario_id_param
 
         config = ConfiguracaoCenarios.query.filter_by(usuario_id=target_user_id).first()
@@ -87,6 +93,12 @@ def save_cenarios_config(current_user):
         usuario_id_param = request.args.get('usuario_id', type=int)
         target_user_id = current_user.id
         if current_user.role == 'admin' and usuario_id_param:
+            # Validar se o usuário existe
+            target_user = User.query.get(usuario_id_param)
+            if not target_user:
+                return jsonify({
+                    'message': f'Usuário com ID {usuario_id_param} não encontrado'
+                }), 404
             target_user_id = usuario_id_param
         
         # Buscar configuração existente

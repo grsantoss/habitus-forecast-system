@@ -75,6 +75,21 @@ const PublicRoute = ({ children }) => {
   return isAuthenticated ? <Navigate to="/dashboard" /> : children;
 };
 
+// Componente para redirecionar raiz para login ou dashboard
+const RootRedirect = () => {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+      </div>
+    );
+  }
+
+  return <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />;
+};
+
 // Componentes placeholder para as outras páginas
 
 
@@ -95,6 +110,9 @@ function App() {
       <AuthProvider>
         <Router>
           <Routes>
+            {/* Rota raiz - redireciona para login ou dashboard */}
+            <Route path="/" element={<RootRedirect />} />
+
             {/* Rotas públicas */}
             <Route 
               path="/login" 
@@ -114,7 +132,6 @@ function App() {
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Navigate to="/dashboard" />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="data-upload" element={<DataUpload />} />
               <Route 
@@ -160,7 +177,7 @@ function App() {
             </Route>
 
             {/* Rota catch-all */}
-            <Route path="*" element={<Navigate to="/dashboard" />} />
+            <Route path="*" element={<Navigate to="/login" />} />
           </Routes>
         </Router>
         <Toaster position="top-right" richColors />

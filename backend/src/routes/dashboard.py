@@ -422,7 +422,17 @@ def atualizar_saldo_inicial(current_user):
         # Buscar projeto do usuário (ou do usuário alvo)
         projeto = Projeto.query.filter_by(usuario_id=target_user_id).first()
         if not projeto:
-            return jsonify({'message': 'Projeto não encontrado'}), 404
+            # Criar projeto padrão se não existir
+            from datetime import date
+            projeto = Projeto(
+                usuario_id=target_user_id,
+                nome_cliente='Projeto Padrão',
+                data_base_estudo=date.today(),
+                saldo_inicial_caixa=saldo_inicial,
+                ponto_equilibrio=0
+            )
+            db.session.add(projeto)
+            db.session.flush()
         
         # Atualizar saldo inicial
         projeto.saldo_inicial_caixa = saldo_inicial
@@ -470,7 +480,13 @@ def obter_saldo_inicial(current_user):
         # Buscar projeto do usuário (ou do usuário alvo)
         projeto = Projeto.query.filter_by(usuario_id=target_user_id).first()
         if not projeto:
-            return jsonify({'message': 'Projeto não encontrado'}), 404
+            # Retornar valores padrão quando não há projeto
+            return jsonify({
+                'saldo_inicial': 0.0,
+                'ponto_equilibrio': 0.0,
+                'projeto_id': None,
+                'message': 'Nenhum projeto encontrado. Faça upload de uma planilha para criar um projeto.'
+            }), 200
         
         return jsonify({
             'saldo_inicial': float(projeto.saldo_inicial_caixa or 0),
@@ -510,7 +526,17 @@ def atualizar_ponto_equilibrio(current_user):
         # Buscar projeto do usuário (ou do usuário alvo)
         projeto = Projeto.query.filter_by(usuario_id=target_user_id).first()
         if not projeto:
-            return jsonify({'message': 'Projeto não encontrado'}), 404
+            # Criar projeto padrão se não existir
+            from datetime import date
+            projeto = Projeto(
+                usuario_id=target_user_id,
+                nome_cliente='Projeto Padrão',
+                data_base_estudo=date.today(),
+                saldo_inicial_caixa=0,
+                ponto_equilibrio=ponto_equilibrio
+            )
+            db.session.add(projeto)
+            db.session.flush()
         
         # Atualizar ponto de equilíbrio
         projeto.ponto_equilibrio = ponto_equilibrio

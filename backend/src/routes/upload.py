@@ -112,7 +112,7 @@ def upload_planilha(current_user):
         file.save(temp_path)
         
         # Criar diretório de armazenamento permanente
-        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
+        upload_dir = os.getenv('UPLOAD_DIR', '/app/uploads')
         os.makedirs(upload_dir, exist_ok=True)
         
         # Caminho permanente para o arquivo

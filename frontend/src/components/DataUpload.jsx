@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { uploadAPI } from '../lib/api';
+import { API_BASE_URL } from '../lib/config';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -134,7 +135,6 @@ const DataUpload = () => {
       
       const xhr = new XMLHttpRequest();
       const token = localStorage.getItem('token');
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
       
       // Configurar progresso real
       xhr.upload.addEventListener('progress', (e) => {
@@ -176,7 +176,7 @@ const DataUpload = () => {
           reject({ code: 'ABORTED' });
         });
         
-        xhr.open('POST', `${apiUrl}/upload-planilha`);
+        xhr.open('POST', `${API_BASE_URL}/upload-planilha`);
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         xhr.timeout = 300000; // 5 minutos
         xhr.send(formData);
@@ -256,8 +256,7 @@ const DataUpload = () => {
 
   const handleDownload = async (uploadItem) => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${apiUrl}/uploads/${uploadItem.id}/download`, {
+      const response = await fetch(`${API_BASE_URL}/uploads/${uploadItem.id}/download`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -285,8 +284,7 @@ const DataUpload = () => {
   const handleDeleteUpload = async (uploadId) => {
     if (window.confirm('Tem certeza que deseja excluir este upload?')) {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-        const response = await fetch(`${apiUrl}/uploads/${uploadId}`, {
+        const response = await fetch(`${API_BASE_URL}/uploads/${uploadId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -356,8 +354,7 @@ const DataUpload = () => {
   // Função para buscar histórico de uploads
   const fetchUploadHistory = async () => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${apiUrl}/uploads/history`, {
+      const response = await fetch(`${API_BASE_URL}/uploads/history`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'

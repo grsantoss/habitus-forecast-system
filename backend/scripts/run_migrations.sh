@@ -4,12 +4,22 @@
 
 set -e  # Falhar em caso de erro
 
+# Garantir que estamos no diretório correto
+cd "$(dirname "$0")/.." || cd /app || {
+    echo "❌ ERRO: Não foi possível navegar para o diretório do projeto" >&2
+    exit 1
+}
+
 echo "🔄 Verificando configuração do Alembic..."
+echo "   Diretório atual: $(pwd)"
 
 # Verificar se alembic.ini existe
 ALEMBIC_INI="${ALEMBIC_INI:-migrations/alembic.ini}"
 if [ ! -f "$ALEMBIC_INI" ]; then
     echo "❌ ERRO: Arquivo alembic.ini não encontrado em: $ALEMBIC_INI" >&2
+    echo "   Diretório atual: $(pwd)" >&2
+    echo "   Arquivos encontrados:" >&2
+    ls -la migrations/ 2>/dev/null || echo "   Diretório migrations não encontrado" >&2
     exit 1
 fi
 
@@ -20,6 +30,7 @@ fi
 
 echo "🔄 Executando migrations..."
 echo "   Arquivo de configuração: $ALEMBIC_INI"
+echo "   DATABASE_URL: ${DATABASE_URL:0:30}..." # Mostrar apenas início por segurança
 
 # Executar migrations com retry em caso de falha temporária
 MAX_RETRIES=3

@@ -64,59 +64,6 @@ const ScenarioComparisonModal = ({ scenarioIds, isOpen, onClose }) => {
     }
   }, [isOpen, scenarioIds]);
 
-  // Garantir que o modal fique centralizado - aplicar estilos após renderização
-  useEffect(() => {
-    if (isOpen) {
-      const applyStyles = () => {
-        const dialogContent = document.querySelector('[data-slot="dialog-content"]');
-        if (dialogContent) {
-          // Calcular posição para centralizar (5% de margem em cada lado = 90vw x 90vh centralizado)
-          const viewportWidth = window.innerWidth;
-          const viewportHeight = window.innerHeight;
-          const modalWidth = viewportWidth * 0.9;
-          const modalHeight = viewportHeight * 0.9;
-          const left = (viewportWidth - modalWidth) / 2;
-          const top = (viewportHeight - modalHeight) / 2;
-          
-          // Aplicar estilos inline com !important para garantir prioridade
-          dialogContent.style.setProperty('position', 'fixed', 'important');
-          dialogContent.style.setProperty('top', `${top}px`, 'important');
-          dialogContent.style.setProperty('left', `${left}px`, 'important');
-          dialogContent.style.setProperty('right', 'auto', 'important');
-          dialogContent.style.setProperty('bottom', 'auto', 'important');
-          dialogContent.style.setProperty('transform', 'none', 'important');
-          dialogContent.style.setProperty('width', `${modalWidth}px`, 'important');
-          dialogContent.style.setProperty('height', `${modalHeight}px`, 'important');
-          dialogContent.style.setProperty('max-width', `${modalWidth}px`, 'important');
-          dialogContent.style.setProperty('max-height', `${modalHeight}px`, 'important');
-          dialogContent.style.setProperty('margin', '0', 'important');
-          dialogContent.style.setProperty('display', 'flex', 'important');
-          dialogContent.style.setProperty('flex-direction', 'column', 'important');
-          dialogContent.style.setProperty('grid', 'none', 'important');
-        }
-      };
-      
-      // Aplicar imediatamente e com delays para garantir que funcione após animações
-      applyStyles();
-      const timeout1 = setTimeout(applyStyles, 50);
-      const timeout2 = setTimeout(applyStyles, 150);
-      const timeout3 = setTimeout(applyStyles, 300);
-      const timeout4 = setTimeout(applyStyles, 500);
-      
-      // Reaplicar em caso de resize
-      const handleResize = () => applyStyles();
-      window.addEventListener('resize', handleResize);
-      
-      return () => {
-        clearTimeout(timeout1);
-        clearTimeout(timeout2);
-        clearTimeout(timeout3);
-        clearTimeout(timeout4);
-        window.removeEventListener('resize', handleResize);
-      };
-    }
-  }, [isOpen]);
-
   const fetchComparison = async () => {
     try {
       setLoading(true);
@@ -839,18 +786,7 @@ const ScenarioComparisonModal = ({ scenarioIds, isOpen, onClose }) => {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className="!fixed !w-[90vw] !h-[90vh] !max-w-[90vw] !max-h-[90vh] !sm:max-w-[90vw] !m-0 !rounded-lg p-0 !flex !flex-col !z-[60] !gap-0 !grid-none"
-        style={{ 
-          position: 'fixed',
-          width: '90vw',
-          height: '90vh',
-          maxWidth: '90vw',
-          maxHeight: '90vh',
-          margin: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
+        className="!w-[90vw] !h-[90vh] !max-w-none !max-h-none !sm:max-w-none !m-0 !rounded-lg p-0 !flex !flex-col !z-[60] !gap-0 !grid-none overflow-hidden"
       >
         <DialogHeader className="sticky top-0 bg-background z-10 px-6 pt-6 pb-4 border-b shadow-sm flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">

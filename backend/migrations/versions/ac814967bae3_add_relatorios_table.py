@@ -1,16 +1,17 @@
 """Add relatorios table
 
 Revision ID: ac814967bae3
-Revises: 
+Revises: 0001_initial
 Create Date: 2025-12-08 15:06:46.697022
 
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = 'ac814967bae3'
-down_revision = None
+down_revision = '0001_initial'
 branch_labels = None
 depends_on = None
 
@@ -57,14 +58,34 @@ def upgrade() -> None:
     
     # Criar tipos ENUM para PostgreSQL (SQLite não suporta ENUM nativo)
     if is_postgres:
-        # Criar tipos ENUM para PostgreSQL
-        op.execute("CREATE TYPE report_type AS ENUM ('pdf', 'excel')")
-        op.execute("CREATE TYPE report_template AS ENUM ('executive', 'detailed', 'comparison')")
-        op.execute("CREATE TYPE report_status AS ENUM ('completed', 'scheduled')")
+        # Verificar e criar tipos ENUM apenas se não existirem
+        # Verificar se report_type existe
+        result = bind.execute(sa.text(
+            "SELECT EXISTS(SELECT 1 FROM pg_type WHERE typname = 'report_type')"
+        ))
+        if not result.scalar():
+            op.execute("CREATE TYPE report_type AS ENUM ('pdf', 'excel')")
         
-        report_type_enum = sa.Enum('pdf', 'excel', name='report_type', create_type=False)
-        report_template_enum = sa.Enum('executive', 'detailed', 'comparison', name='report_template', create_type=False)
-        report_status_enum = sa.Enum('completed', 'scheduled', name='report_status', create_type=False)
+        # Verificar se report_template existe
+        result = bind.execute(sa.text(
+            "SELECT EXISTS(SELECT 1 FROM pg_type WHERE typname = 'report_template')"
+        ))
+        if not result.scalar():
+            op.execute("CREATE TYPE report_template AS ENUM ('executive', 'detailed', 'comparison')")
+        
+        # Verificar se report_status existe
+        result = bind.execute(sa.text(
+            "SELECT EXISTS(SELECT 1 FROM pg_type WHERE typname = 'report_status')"
+        ))
+        if not result.scalar():
+            op.execute("CREATE TYPE report_status AS ENUM ('completed', 'scheduled')")
+        
+        # Usar postgresql.ENUM diretamente com create_type=False
+        # Os tipos já foram criados manualmente acima, então não tentar criar novamente
+        # Usar postgresql.ENUM evita o evento _on_table_create que tenta criar tipos
+        report_type_enum = postgresql.ENUM('pdf', 'excel', name='report_type', create_type=False)
+        report_template_enum = postgresql.ENUM('executive', 'detailed', 'comparison', name='report_template', create_type=False)
+        report_status_enum = postgresql.ENUM('completed', 'scheduled', name='report_status', create_type=False)
     else:
         # Para SQLite, usar String com constraint CHECK
         report_type_enum = sa.String(50)

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { dashboardAPI, projectsAPI, adminAPI } from '../lib/api';
+import { API_BASE_URL } from '../lib/config';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -103,6 +104,19 @@ const Dashboard = () => {
       }
     }
   }, [user]);
+
+  // Validar cliente selecionado após carregar lista de clientes
+  useEffect(() => {
+    if (user?.role === 'admin' && selectedClientId && clients.length > 0) {
+      const clientExists = clients.some(c => c.id === selectedClientId);
+      if (!clientExists) {
+        // Cliente não existe mais, limpar seleção
+        console.warn(`Cliente ID ${selectedClientId} não existe mais. Limpando seleção.`);
+        setSelectedClientId(null);
+        localStorage.removeItem('adminSelectedClientId');
+      }
+    }
+  }, [clients, selectedClientId, user]);
 
   // useEffect específico para carregar saldo inicial
   useEffect(() => {
@@ -276,8 +290,19 @@ const Dashboard = () => {
   // Função para atualizar saldo inicial
   const updateSaldoInicial = async (novoSaldo) => {
     try {
-
       const usuarioId = user?.role === 'admin' ? selectedClientId : null;
+      
+      // Validar se o cliente existe antes de enviar
+      if (user?.role === 'admin' && usuarioId) {
+        const clientExists = clients.some(c => c.id === usuarioId);
+        if (!clientExists) {
+          console.error('Cliente selecionado não existe mais');
+          setSelectedClientId(null);
+          localStorage.removeItem('adminSelectedClientId');
+          return;
+        }
+      }
+      
       const response = await dashboardAPI.updateSaldoInicial(novoSaldo, usuarioId);
       setSaldoInicial(novoSaldo);
       
@@ -287,6 +312,13 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('Erro ao atualizar saldo inicial:', error);
+      
+      // Se erro 404 (usuário não encontrado), limpar seleção
+      if (error.response?.status === 404) {
+        console.warn('Usuário não encontrado. Limpando seleção de cliente.');
+        setSelectedClientId(null);
+        localStorage.removeItem('adminSelectedClientId');
+      }
     }
   };
 
@@ -298,8 +330,7 @@ const Dashboard = () => {
           ? `?usuario_id=${usuarioId}`
           : '';
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${apiUrl}/settings/cenarios${qs}`, {
+      const response = await fetch(`${API_BASE_URL}/settings/cenarios${qs}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -386,14 +417,30 @@ const Dashboard = () => {
   // Função para atualizar ponto de equilíbrio no backend
   const updatePontoEquilibrio = async (novoPontoEquilibrio) => {
     try {
-
       const usuarioId = user?.role === 'admin' ? selectedClientId : null;
+      
+      // Validar se o cliente existe antes de enviar
+      if (user?.role === 'admin' && usuarioId) {
+        const clientExists = clients.some(c => c.id === usuarioId);
+        if (!clientExists) {
+          console.error('Cliente selecionado não existe mais');
+          setSelectedClientId(null);
+          localStorage.removeItem('adminSelectedClientId');
+          return;
+        }
+      }
+      
       await dashboardAPI.updatePontoEquilibrio(novoPontoEquilibrio, usuarioId);
     } catch (error) {
       console.error('Erro ao atualizar ponto de equilíbrio:', error);
       console.error('Detalhes do erro:', error.response?.data);
       
-      if (error.response?.status === 401) {
+      // Se erro 404 (usuário não encontrado), limpar seleção
+      if (error.response?.status === 404) {
+        console.warn('Usuário não encontrado. Limpando seleção de cliente.');
+        setSelectedClientId(null);
+        localStorage.removeItem('adminSelectedClientId');
+      } else if (error.response?.status === 401) {
         localStorage.removeItem('token');
         window.location.href = '/login';
       }

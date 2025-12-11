@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { API_BASE_URL } from '../lib/config';
 import { 
   User, 
   Shield, 
@@ -77,8 +78,7 @@ const Settings = () => {
       };
       
       
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${apiUrl}/settings/profile`, {
+      const response = await fetch(`${API_BASE_URL}/settings/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -139,8 +139,7 @@ const Settings = () => {
       };
       
       
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${apiUrl}/settings/password`, {
+      const response = await fetch(`${API_BASE_URL}/settings/password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -229,8 +228,7 @@ const Settings = () => {
         ? `?usuario_id=${selectedClientId}` 
         : '';
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${apiUrl}/settings/cenarios${qs}`, {
+      const response = await fetch(`${API_BASE_URL}/settings/cenarios${qs}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -324,8 +322,7 @@ const Settings = () => {
           ? `?usuario_id=${selectedClientId}` 
           : '';
 
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-        const response = await fetch(`${apiUrl}/settings/cenarios${qs}`, {
+        const response = await fetch(`${API_BASE_URL}/settings/cenarios${qs}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -356,8 +353,7 @@ const Settings = () => {
 
       try {
         const token = localStorage.getItem('token');
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-        const response = await fetch(`${apiUrl}/admin/usuarios?page=1&per_page=100`, {
+        const response = await fetch(`${API_BASE_URL}/admin/usuarios?page=1&per_page=100`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

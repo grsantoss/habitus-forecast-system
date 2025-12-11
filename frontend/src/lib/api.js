@@ -1,23 +1,5 @@
 import axios from 'axios';
-
-// Configuração base da API a partir de variáveis de ambiente
-// Em produção, usar o domínio correto. Em desenvolvimento, usar localhost
-const getApiBaseUrl = () => {
-  // Se VITE_API_URL estiver definida, usar ela
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-  
-  // Se estiver em produção (modo build), usar o domínio de produção
-  if (import.meta.env.PROD) {
-    return 'https://app.habitusforecast.com.br/api';
-  }
-  
-  // Em desenvolvimento, usar localhost
-  return 'http://localhost:5000/api';
-};
-
-const API_BASE_URL = getApiBaseUrl();
+import { API_BASE_URL } from './config';
 
 // Criar instância do axios
 const api = axios.create({

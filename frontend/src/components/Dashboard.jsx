@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { dashboardAPI, projectsAPI, adminAPI } from '../lib/api';
+import { API_BASE_URL } from '../lib/config';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -329,8 +330,7 @@ const Dashboard = () => {
           ? `?usuario_id=${usuarioId}`
           : '';
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${apiUrl}/settings/cenarios${qs}`, {
+      const response = await fetch(`${API_BASE_URL}/settings/cenarios${qs}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

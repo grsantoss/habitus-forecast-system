@@ -786,7 +786,7 @@ const ScenarioComparisonModal = ({ scenarioIds, isOpen, onClose }) => {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className="inset-[5%] !w-[90vw] !h-[90vh] !max-w-none !max-h-none !sm:max-w-none !translate-x-0 !translate-y-0 !m-0 !rounded-lg p-0 !flex !flex-col !z-[60] !gap-0 !grid-none overflow-hidden"
+        className="!w-[90vw] !h-[90vh] !max-w-none !max-h-none !sm:max-w-none !m-0 !rounded-lg p-0 !flex !flex-col !z-[60] !gap-0 !grid-none overflow-hidden"
       >
         <DialogHeader className="sticky top-0 bg-background z-10 px-6 pt-6 pb-4 border-b shadow-sm flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
